@@ -23,7 +23,10 @@
           <?php if (!empty($r['landing_page_name'])): ?><div class="text-muted" style="font-size:11.5px;margin-top:2px">→ <?= e($r['landing_page_name']) ?></div><?php endif; ?>
         </td>
         <td class="text-muted"><?= e($r['channel_name'] ?? '—') ?></td>
-        <td class="text-muted"><?= e($r['utm_source']) ?> / <?= e($r['utm_medium']) ?> / <?= e($r['utm_campaign']) ?></td>
+        <td class="text-muted">
+          <?= e($r['utm_source']) ?> / <?= e($r['utm_medium']) ?> / <?= e($r['utm_campaign']) ?>
+          <?php if (!empty($r['traffic_type_code'])): ?><div style="margin-top:2px">utm_cv: <code><?= e($r['traffic_type_code']) ?></code></div><?php endif; ?>
+        </td>
         <td>
           <div class="snippet-box mb-0">
             <pre id="camp-<?= (int) $r['id'] ?>" style="white-space:pre-wrap;word-break:break-all"><?= e($r['generated_url']) ?></pre>

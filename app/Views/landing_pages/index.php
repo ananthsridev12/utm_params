@@ -5,6 +5,7 @@
   </div>
   <div>
     <a class="btn secondary" href="<?= url($routeBase . '/export') ?>">Export CSV</a>
+    <?php if (has_role('editor')): ?><a class="btn secondary" href="<?= url($routeBase . '/import') ?>">Import CSV</a><?php endif; ?>
     <?php if (has_role('editor')): ?><a class="btn" href="<?= url($routeBase . '/create') ?>">Add Landing Page</a><?php endif; ?>
   </div>
 </div>

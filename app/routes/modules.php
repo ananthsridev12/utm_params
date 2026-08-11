@@ -29,6 +29,11 @@ foreach ([
 // alongside the basic-details-+-snippets one registered above.
 $router->get('tracking-configs/export-full', [TrackingConfigController::class, 'exportCsvFull']);
 
+// Landing Pages CSV import (template download + upload).
+$router->get('landing-pages/import', [LandingPageController::class, 'showImport']);
+$router->post('landing-pages/import', [LandingPageController::class, 'import']);
+$router->get('landing-pages/import-template', [LandingPageController::class, 'downloadTemplate']);
+
 // Snippet Templates -- custom shape (no delete-of-defaults, no CSV export).
 $router->get('snippet-templates', [SnippetTemplateController::class, 'index']);
 $router->get('snippet-templates/create', [SnippetTemplateController::class, 'create']);

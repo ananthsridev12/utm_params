@@ -98,7 +98,14 @@ a code change:
    keeps `/app`, `/config`, `/database` outside the web-servable path). If it doesn't,
    leave the root-level `.htaccess` in place; it transparently forwards everything to
    `/public` from your account's root.
-6. Visit your site — you should land on the login page. Log in with the demo account or
+6. **mod_rewrite must be on** — every link in the app (`/login`, `/verticals/edit/3`, ...)
+   is a clean path, not `index.php?r=...`; the `.htaccess` file at whichever level is your
+   document root is what turns that back into a real request behind the scenes. This is
+   the default on essentially all cPanel/Apache shared hosting, so normally there's
+   nothing to do — but if pages 404 after deploying, check cPanel → MultiPHP/Apache
+   settings (or ask your host) that `.htaccess` overrides and `mod_rewrite` are enabled
+   for your account.
+7. Visit your site — you should land on the login page. Log in with the demo account or
    register a new company from `/index.php?r=register`.
 
 No `composer install`, no build step, no queue/cron/Redis required.
@@ -145,12 +152,14 @@ mysql -u root utm_taxonomy < database/schema.sql
 cp config/config.sample.php config/config.php
 # edit config/config.php with your local DB credentials
 
-# 3. Run
-php -S localhost:8000 -t public
+# 3. Run -- dev-router.php mimics the .htaccess rewrite so clean URLs (/login, etc.)
+#    work the same locally as they do on real Apache/cPanel hosting. PHP's built-in
+#    server doesn't read .htaccess on its own, hence the router script.
+php -S localhost:8000 -t public dev-router.php
 ```
 
-Then open `http://localhost:8000/index.php?r=login` and sign in with the seeded demo
-account (`demo@solidpro-es.com` / `Passw0rd!`), or register a new workspace.
+Then open `http://localhost:8000/login` and sign in with the seeded demo account
+(`demo@solidpro-es.com` / `Passw0rd!`), or register a new workspace.
 
 ## Security notes
 

@@ -393,6 +393,11 @@ CREATE TABLE IF NOT EXISTS campaigns (
     tenant_id       INT UNSIGNED NOT NULL,
     landing_page_id INT UNSIGNED NULL,
     channel_id      INT UNSIGNED NULL,
+    -- utm_cv: which Traffic Type (mar/abm/...) this campaign link is tagged for. Lives on
+    -- the campaign, not just the Tracking Configuration -- landing-page scripts read it
+    -- straight off the clicked URL via getUrlParam('utm_cv'), so it has to actually be a
+    -- query param on the link the Campaign builder generates.
+    traffic_type_id INT UNSIGNED NULL,
     name            VARCHAR(190) NOT NULL,
     target_url      VARCHAR(255) NOT NULL,
     utm_source      VARCHAR(100) NOT NULL,
@@ -413,7 +418,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
     KEY idx_campaigns_tenant (tenant_id),
     CONSTRAINT fk_campaigns_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
     CONSTRAINT fk_campaigns_landing_page FOREIGN KEY (landing_page_id) REFERENCES landing_pages(id) ON DELETE SET NULL,
-    CONSTRAINT fk_campaigns_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
+    CONSTRAINT fk_campaigns_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL,
+    CONSTRAINT fk_campaigns_traffic_type FOREIGN KEY (traffic_type_id) REFERENCES traffic_types(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

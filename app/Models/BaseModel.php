@@ -106,6 +106,17 @@ abstract class BaseModel
         return $stmt->execute([$id, $tenantId]);
     }
 
+    /** Case-insensitive exact match on any column, tenant-scoped. Used by CSV importers
+     *  that reference related records by human-readable name instead of a numeric ID. */
+    public static function findByColumn(string $column, string $value): ?array
+    {
+        $tenantId = TenantContext::requireTenant();
+        $stmt = static::db()->prepare("SELECT * FROM " . static::$table . " WHERE tenant_id = ? AND LOWER({$column}) = LOWER(?) LIMIT 1");
+        $stmt->execute([$tenantId, $value]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
     public static function count(): int
     {
         $tenantId = TenantContext::requireTenant();

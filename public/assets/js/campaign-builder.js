@@ -13,6 +13,7 @@
   var sourceEl = $('utm_source');
   var mediumEl = $('utm_medium');
   var campaignEl = $('utm_campaign');
+  var trafficTypeEl = $('traffic_type_id');
   var termEl = $('utm_term');
   var termLabelEl = $('utm_term_label');
   var contentEl = $('utm_content');
@@ -109,6 +110,13 @@
     suggestName();
   }
 
+  // Ad platforms' click-time placeholders (Google/Bing ValueTrack: {keyword}, {device},
+  // {matchtype}, {network}, ...) only get recognized when they appear literally,
+  // unencoded, in the URL -- mirrors CampaignController::unencodeValueTrackBraces().
+  function unencodeValueTrackBraces(queryString) {
+    return queryString.replace(/%7B/gi, '{').replace(/%7D/gi, '}');
+  }
+
   function renderPreview() {
     var url = (targetUrlEl.value || '').trim();
     if (!url) { preview.textContent = ''; return; }
@@ -118,6 +126,10 @@
     if (campaignEl.value) params.utm_campaign = campaignEl.value;
     if (termEl.value) params.utm_term = termEl.value;
     if (contentEl.value) params.utm_content = contentEl.value;
+    if (trafficTypeEl && trafficTypeEl.value) {
+      var tt = data.trafficTypes[trafficTypeEl.value];
+      if (tt) params.utm_cv = tt.code;
+    }
     extraContainer.querySelectorAll('input[data-extra-key]').forEach(function (input) {
       if (input.value) params[input.getAttribute('data-extra-key')] = input.value;
     });
@@ -126,7 +138,7 @@
     }).join('&');
     if (!query) { preview.textContent = url; return; }
     var separator = url.indexOf('?') === -1 ? '?' : '&';
-    preview.textContent = url + separator + query;
+    preview.textContent = url + separator + unencodeValueTrackBraces(query);
   }
 
   function renderTemplate(tpl, ctx) {
@@ -148,6 +160,7 @@
     var vertical = lp && data.verticals[lp.vertical_id] ? data.verticals[lp.vertical_id] : null;
     var service = lp && data.services[lp.service_id] ? data.services[lp.service_id] : null;
     var channel = channelsById[channelEl.value];
+    var trafficType = trafficTypeEl && data.trafficTypes[trafficTypeEl.value];
     var ctx = {
       seq: String(data.nextSeq || ''),
       service_vertical: vertical ? (vertical.short_code || '') : '',
@@ -161,6 +174,8 @@
       utm_campaign: campaignEl.value || '',
       utm_term: termEl.value || '',
       utm_content: contentEl.value || '',
+      utm_cv: trafficType ? (trafficType.code || '') : '',
+      traffic_type: trafficType ? (trafficType.code || '') : '',
     };
     var cv = customValues();
     Object.keys(cv).forEach(function (k) { ctx[k] = cv[k]; });
@@ -178,6 +193,7 @@
 
   landingPageEl.addEventListener('change', function () { applyLandingPage(); renderPreview(); suggestName(); });
   channelEl.addEventListener('change', function () { applyChannel(false); });
+  if (trafficTypeEl) trafficTypeEl.addEventListener('change', function () { renderPreview(); suggestName(); });
   [sourceEl, mediumEl, campaignEl, termEl, contentEl].forEach(function (el) {
     el.addEventListener('input', function () { renderPreview(); suggestName(); });
   });

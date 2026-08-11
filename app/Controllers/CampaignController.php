@@ -13,6 +13,7 @@ use App\Models\CustomVariableValue;
 use App\Models\LandingPage;
 use App\Models\Service;
 use App\Models\Tenant;
+use App\Models\TrafficType;
 use App\Models\Vertical;
 
 class CampaignController extends BaseController
@@ -89,6 +90,8 @@ class CampaignController extends BaseController
             'landingPageOptions' => LandingPage::forDropdown(),
             'verticalOptions' => Vertical::allActive(),
             'serviceOptions' => Service::allActive(),
+            'trafficTypeOptions' => TrafficType::allActive(),
+            'trafficTypesJson' => array_map(fn($t) => ['id' => (int) $t['id'], 'code' => $t['code'], 'name' => $t['name']], TrafficType::allActive()),
             'customVariables' => CustomVariable::allWithOptions(true, 'campaign'),
             'campaignNamePattern' => $tenant['campaign_name_pattern'] ?? '',
             'nextSeq' => Campaign::nextSeq(),
@@ -116,6 +119,7 @@ class CampaignController extends BaseController
                 'utm_source' => $r['utm_source'],
                 'utm_medium' => $r['utm_medium'],
                 'utm_campaign' => $r['utm_campaign'],
+                'utm_cv' => $r['traffic_type_code'] ?? '',
                 'utm_term' => $r['utm_term'],
                 'utm_content' => $r['utm_content'],
                 'extra_params' => implode('; ', $extra),
@@ -162,6 +166,22 @@ class CampaignController extends BaseController
         if ($utmMedium === '') $errors['utm_medium'] = 'utm_medium is required.';
         if ($utmCampaign === '') $errors['utm_campaign'] = 'utm_campaign is required.';
 
+        // utm_cv (Traffic Type) has to live on the campaign link itself, not just the
+        // Tracking Configuration -- landing-page scripts read it straight off the
+        // clicked URL via getUrlParam('utm_cv'), same as the other standard UTM params.
+        $trafficTypeId = $toIntOrNull($input['traffic_type_id'] ?? null);
+        $trafficTypeCode = null;
+        if ($trafficTypeId === null) {
+            $errors['traffic_type_id'] = 'Traffic Type (utm_cv) is required.';
+        } else {
+            $trafficType = TrafficType::find($trafficTypeId);
+            if (!$trafficType) {
+                $errors['traffic_type_id'] = 'Traffic Type (utm_cv) is required.';
+            } else {
+                $trafficTypeCode = $trafficType['code'];
+            }
+        }
+
         // Extra, channel-specific params come in as extra_params[key]=value from the
         // dynamic fields the JS renders for the selected Channel (e.g. network, device).
         // These go into the generated tracking URL's querystring.
@@ -185,15 +205,21 @@ class CampaignController extends BaseController
                 'utm_campaign' => $utmCampaign,
                 'utm_term' => $utmTerm ?: null,
                 'utm_content' => $utmContent ?: null,
+                'utm_cv' => $trafficTypeCode,
             ], fn($v) => $v !== null && $v !== '');
             $query = array_merge($query, $extraParams);
             $separator = str_contains($targetUrl, '?') ? '&' : '?';
-            $generatedUrl = $targetUrl . $separator . http_build_query($query);
+            // http_build_query percent-encodes { and } like any other character, but ad
+            // platforms' click-time placeholders (Google/Bing ValueTrack: {keyword},
+            // {device}, {matchtype}, {network}, ...) only get recognized and substituted
+            // when they appear literally, unencoded, in the URL -- so undo just those two.
+            $generatedUrl = $targetUrl . $separator . self::unencodeValueTrackBraces(http_build_query($query));
         }
 
         $data = [
             'landing_page_id' => $toIntOrNull($input['landing_page_id'] ?? null),
             'channel_id' => $channelId,
+            'traffic_type_id' => $trafficTypeId,
             'name' => $name,
             'target_url' => $targetUrl,
             'utm_source' => $utmSource,
@@ -219,5 +245,11 @@ class CampaignController extends BaseController
             }
         }
         CustomVariableValue::saveForEntity('campaign', $savedId, $values);
+    }
+
+    /** Public + static so the same logic is trivially unit-testable and mirrors the JS version in campaign-builder.js. */
+    public static function unencodeValueTrackBraces(string $queryString): string
+    {
+        return str_replace(['%7B', '%7D', '%7b', '%7d'], ['{', '}', '{', '}'], $queryString);
     }
 }

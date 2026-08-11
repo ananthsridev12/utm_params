@@ -13,6 +13,7 @@ $campaignData = [
     'landingPages' => array_column($landingPageOptions, null, 'id'),
     'verticals' => array_column($verticalOptions, null, 'id'),
     'services' => array_column($serviceOptions, null, 'id'),
+    'trafficTypes' => array_column($trafficTypesJson, null, 'id'),
     'existingExtraParams' => $existingExtraParams,
     'namePattern' => $campaignNamePattern,
     'nextSeq' => $nextSeq,
@@ -76,6 +77,17 @@ $campaignData = [
         <label for="utm_campaign">utm_campaign</label>
         <input type="text" id="utm_campaign" name="utm_campaign" value="<?= e($record['utm_campaign'] ?? '') ?>" placeholder="e.g. q3-dt-launch" required>
         <?php if (!empty($errors['utm_campaign'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['utm_campaign']) ?></div><?php endif; ?>
+      </div>
+      <div class="field">
+        <label for="traffic_type_id">Traffic Type (utm_cv)</label>
+        <select id="traffic_type_id" name="traffic_type_id" required>
+          <option value="">— select —</option>
+          <?php foreach ($trafficTypeOptions as $o): ?>
+            <option value="<?= (int) $o['id'] ?>" <?= (int) ($record['traffic_type_id'] ?? 0) === (int) $o['id'] ? 'selected' : '' ?>><?= e($o['name']) ?> (<?= e($o['code']) ?>)</option>
+          <?php endforeach; ?>
+        </select>
+        <div class="hint">Appended to the generated URL as <code>utm_cv=&lt;code&gt;</code> -- your landing page scripts read this straight off the link. Manage the list under <a href="<?= url('traffic-types') ?>">Traffic Types</a>.</div>
+        <?php if (!empty($errors['traffic_type_id'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['traffic_type_id']) ?></div><?php endif; ?>
       </div>
       <div class="field">
         <label for="utm_term" id="utm_term_label">utm_term (optional)</label>
