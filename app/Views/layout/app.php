@@ -21,6 +21,7 @@ $nav = [
         ['events', 'Events', 'flag'],
         ['lead-magnets', 'Lead Magnets', 'gift'],
         ['traffic-types', 'Traffic Types', 'compass'],
+        ['custom-variables', 'Custom Variables', 'sliders'],
     ],
     'Settings' => [
         ['snippet-templates', 'Snippet Templates', 'terminal'],

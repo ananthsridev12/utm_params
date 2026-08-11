@@ -133,8 +133,20 @@ abstract class BaseController
             exit;
         }
 
+        $this->afterSave($savedId, Request::all());
+
         header('Location: ' . $this->redirectAfterSave($savedId));
         exit;
+    }
+
+    /**
+     * Runs right after a successful create/update, before the redirect. No-op
+     * by default; override to persist related/nested data alongside the main
+     * record (e.g. Custom Variables' options, Tracking Configs' custom
+     * variable values) using the same raw request the main save already used.
+     */
+    protected function afterSave(int $savedId, array $input): void
+    {
     }
 
     /**

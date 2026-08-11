@@ -4,10 +4,16 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Request;
+use App\Core\TenantContext;
 use App\Core\View;
 use App\Models\Campaign;
 use App\Models\Channel;
+use App\Models\CustomVariable;
+use App\Models\CustomVariableValue;
 use App\Models\LandingPage;
+use App\Models\Service;
+use App\Models\Tenant;
+use App\Models\Vertical;
 
 class CampaignController extends BaseController
 {
@@ -26,19 +32,61 @@ class CampaignController extends BaseController
         ]);
     }
 
+    public function create(array $params = []): void
+    {
+        Auth::requireRole($this->writeRole);
+        View::render($this->viewDir . '/form', array_merge([
+            'title' => $this->title,
+            'routeBase' => $this->routeBase,
+            'mode' => 'create',
+            'record' => [],
+            'errors' => [],
+            'customValues' => [],
+        ], $this->extraViewData()));
+    }
+
+    public function edit(array $params): void
+    {
+        Auth::requireRole($this->writeRole);
+        $id = (int) $params['id'];
+        $model = $this->modelClass;
+        $record = $model::find($id);
+        if (!$record) {
+            http_response_code(404);
+            exit('Not found.');
+        }
+        View::render($this->viewDir . '/form', array_merge([
+            'title' => $this->title,
+            'routeBase' => $this->routeBase,
+            'mode' => 'edit',
+            'record' => $record,
+            'errors' => [],
+            'customValues' => CustomVariableValue::forEntityById('campaign', $id),
+        ], $this->extraViewData()));
+    }
+
     protected function extraViewData(): array
     {
         $channels = Channel::allActive();
+        $tenant = Tenant::find(TenantContext::requireTenant());
+
         return [
             'channelOptions' => $channels,
             'channelsJson' => array_map(fn($c) => [
                 'id' => (int) $c['id'],
+                'name' => $c['name'],
+                'short_code' => $c['short_code'],
                 'default_utm_source' => $c['default_utm_source'],
                 'default_utm_medium' => $c['default_utm_medium'],
                 'term_label' => $c['term_label'],
                 'extra_params' => Channel::parseExtraParamLabels($c['extra_param_labels']),
             ], $channels),
             'landingPageOptions' => LandingPage::forDropdown(),
+            'verticalOptions' => Vertical::allActive(),
+            'serviceOptions' => Service::allActive(),
+            'customVariables' => CustomVariable::allWithOptions(true, 'campaign'),
+            'campaignNamePattern' => $tenant['campaign_name_pattern'] ?? '',
+            'nextSeq' => Campaign::nextSeq(),
         ];
     }
 
@@ -65,6 +113,7 @@ class CampaignController extends BaseController
 
         // Extra, channel-specific params come in as extra_params[key]=value from the
         // dynamic fields the JS renders for the selected Channel (e.g. network, device).
+        // These go into the generated tracking URL's querystring.
         $extraParamsRaw = Request::post('extra_params', []);
         $extraParams = [];
         if (is_array($extraParamsRaw)) {
@@ -106,5 +155,18 @@ class CampaignController extends BaseController
             'status' => $status,
         ];
         return [$errors, $data];
+    }
+
+    protected function afterSave(int $savedId, array $input): void
+    {
+        $customVariables = CustomVariable::allWithOptions(true, 'campaign');
+        $posted = Request::post('custom_variables', []);
+        $values = [];
+        if (is_array($posted)) {
+            foreach ($customVariables as $cv) {
+                $values[(int) $cv['id']] = $posted[$cv['id']] ?? '';
+            }
+        }
+        CustomVariableValue::saveForEntity('campaign', $savedId, $values);
     }
 }

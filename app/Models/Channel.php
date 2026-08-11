@@ -6,7 +6,7 @@ class Channel extends BaseModel
 {
     protected static string $table = 'channels';
     protected static array $fillable = [
-        'name', 'default_utm_source', 'default_utm_medium', 'term_label',
+        'name', 'short_code', 'default_utm_source', 'default_utm_medium', 'term_label',
         'extra_param_labels', 'description', 'status',
     ];
 

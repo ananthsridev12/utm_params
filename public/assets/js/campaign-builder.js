@@ -6,6 +6,7 @@
   var channelsById = {};
   (data.channels || []).forEach(function (c) { channelsById[c.id] = c; });
 
+  var nameEl = $('name');
   var landingPageEl = $('landing_page_id');
   var targetUrlEl = $('target_url');
   var channelEl = $('channel_id');
@@ -17,8 +18,11 @@
   var contentEl = $('utm_content');
   var extraContainer = $('extra-params-container');
   var preview = $('gen-url-preview');
+  var customFields = Array.prototype.slice.call(document.querySelectorAll('[data-custom-key]'));
 
   var currentExtraValues = Object.assign({}, data.existingExtraParams || {});
+  var nameTouched = !!(nameEl && nameEl.value);
+  if (nameEl) nameEl.addEventListener('input', function () { nameTouched = true; });
 
   function applyLandingPage() {
     var lp = data.landingPages[landingPageEl.value];
@@ -71,6 +75,7 @@
     }
     renderExtraParams(channel, preserveExtraValues);
     renderPreview();
+    suggestName();
   }
 
   function renderPreview() {
@@ -93,10 +98,62 @@
     preview.textContent = url + separator + query;
   }
 
-  landingPageEl.addEventListener('change', function () { applyLandingPage(); renderPreview(); });
+  function renderTemplate(tpl, ctx) {
+    return tpl.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function (m, key) {
+      return Object.prototype.hasOwnProperty.call(ctx, key) ? ctx[key] : '';
+    });
+  }
+
+  function customValues() {
+    var out = {};
+    customFields.forEach(function (el) { out[el.getAttribute('data-custom-key')] = el.value || ''; });
+    return out;
+  }
+
+  // {{service_vertical}}/{{service}} come from the selected Landing Page's own
+  // vertical/service, mirroring the server-side rule in CampaignController.
+  function buildNameContext() {
+    var lp = data.landingPages[landingPageEl.value];
+    var vertical = lp && data.verticals[lp.vertical_id] ? data.verticals[lp.vertical_id] : null;
+    var service = lp && data.services[lp.service_id] ? data.services[lp.service_id] : null;
+    var channel = channelsById[channelEl.value];
+    var ctx = {
+      seq: String(data.nextSeq || ''),
+      service_vertical: vertical ? (vertical.short_code || '') : '',
+      vertical_name: vertical ? (vertical.name || '') : '',
+      service: service ? (service.slug || '') : '',
+      service_name: service ? (service.name || '') : '',
+      channel: channel ? (channel.short_code || '') : '',
+      channel_name: channel ? (channel.name || '') : '',
+      utm_source: sourceEl.value || '',
+      utm_medium: mediumEl.value || '',
+      utm_campaign: campaignEl.value || '',
+      utm_term: termEl.value || '',
+      utm_content: contentEl.value || '',
+    };
+    var cv = customValues();
+    Object.keys(cv).forEach(function (k) { ctx[k] = cv[k]; });
+    return ctx;
+  }
+
+  // Only ever fills the Name field if the user hasn't typed in it themselves --
+  // this is a suggestion, not an override, since Name stays free-text.
+  function suggestName() {
+    if (!data.namePattern || !nameEl || nameTouched) return;
+    var raw = renderTemplate(data.namePattern, buildNameContext());
+    raw = raw.replace(/-{2,}/g, '-').replace(/^-+|-+$/g, '');
+    nameEl.value = raw;
+  }
+
+  landingPageEl.addEventListener('change', function () { applyLandingPage(); renderPreview(); suggestName(); });
   channelEl.addEventListener('change', function () { applyChannel(false); });
-  [targetUrlEl, sourceEl, mediumEl, campaignEl, termEl, contentEl].forEach(function (el) {
-    el.addEventListener('input', renderPreview);
+  [sourceEl, mediumEl, campaignEl, termEl, contentEl].forEach(function (el) {
+    el.addEventListener('input', function () { renderPreview(); suggestName(); });
+  });
+  targetUrlEl.addEventListener('input', renderPreview);
+  customFields.forEach(function (el) {
+    el.addEventListener('input', suggestName);
+    el.addEventListener('change', suggestName);
   });
 
   // Initial render (covers edit mode: channel already selected, existing extra param values).

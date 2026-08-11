@@ -74,4 +74,16 @@ class TrackingConfig extends BaseModel
         $stmt->execute($params);
         return (int) $stmt->fetchColumn() > 0;
     }
+
+    /** Running count for this tenant, for the {{seq}} naming-convention token. */
+    public static function nextSeq(): int
+    {
+        return self::count() + 1;
+    }
+
+    public static function delete(int $id): bool
+    {
+        CustomVariableValue::deleteForEntity('tracking_config', $id);
+        return parent::delete($id);
+    }
 }

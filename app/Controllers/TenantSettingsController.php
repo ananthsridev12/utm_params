@@ -30,14 +30,23 @@ class TenantSettingsController
         }
         $name = trim((string) Request::post('name'));
         $domain = trim((string) Request::post('primary_domain'));
+        $formIdPattern = trim((string) Request::post('tracking_form_id_pattern'));
+        $campaignPattern = trim((string) Request::post('campaign_name_pattern'));
 
         if ($name === '') {
             Flash::error('Company name is required.');
             header('Location: ' . Url::to('tenant-settings'));
             exit;
         }
+        if ($formIdPattern === '') {
+            Flash::error('The Tracking Configuration form_id pattern can\'t be empty.');
+            header('Location: ' . Url::to('tenant-settings'));
+            exit;
+        }
 
-        Tenant::update(TenantContext::requireTenant(), ['name' => $name, 'primary_domain' => $domain ?: null]);
+        $tenantId = TenantContext::requireTenant();
+        Tenant::update($tenantId, ['name' => $name, 'primary_domain' => $domain ?: null]);
+        Tenant::updateNamingPatterns($tenantId, $formIdPattern, $campaignPattern ?: null);
         Flash::success('Company settings updated.');
         header('Location: ' . Url::to('tenant-settings'));
         exit;

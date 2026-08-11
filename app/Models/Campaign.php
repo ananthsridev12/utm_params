@@ -17,7 +17,7 @@ class Campaign extends BaseModel
     {
         $tenantId = TenantContext::requireTenant();
         $stmt = Database::connection()->prepare(
-            'SELECT c.*, ch.name AS channel_name, lp.name AS landing_page_name
+            'SELECT c.*, ch.name AS channel_name, ch.short_code AS channel_short_code, lp.name AS landing_page_name
              FROM campaigns c
              LEFT JOIN channels ch ON ch.id = c.channel_id
              LEFT JOIN landing_pages lp ON lp.id = c.landing_page_id
@@ -25,5 +25,17 @@ class Campaign extends BaseModel
         );
         $stmt->execute([$tenantId]);
         return $stmt->fetchAll();
+    }
+
+    /** Running count for this tenant, for the {{seq}} naming-convention token. */
+    public static function nextSeq(): int
+    {
+        return self::count() + 1;
+    }
+
+    public static function delete(int $id): bool
+    {
+        CustomVariableValue::deleteForEntity('campaign', $id);
+        return parent::delete($id);
     }
 }

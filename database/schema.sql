@@ -14,13 +14,17 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- ----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS tenants (
-    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name            VARCHAR(150) NOT NULL,
-    slug            VARCHAR(150) NOT NULL,
-    primary_domain  VARCHAR(190) NULL,
-    status          ENUM('active','suspended') NOT NULL DEFAULT 'active',
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    id                        INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name                      VARCHAR(150) NOT NULL,
+    slug                      VARCHAR(150) NOT NULL,
+    primary_domain            VARCHAR(190) NULL,
+    status                    ENUM('active','suspended') NOT NULL DEFAULT 'active',
+    -- Naming Conventions (Company Settings): token patterns using the same {{token}}
+    -- syntax as Snippet Templates (see App\Models\SnippetTemplate::render()).
+    tracking_form_id_pattern  VARCHAR(255) NOT NULL DEFAULT '{{page_type_short}}-{{service_vertical}}-{{service}}-{{form_type}}-{{form_location}}',
+    campaign_name_pattern     VARCHAR(255) NULL,
+    created_at                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_tenants_slug (slug)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -206,6 +210,8 @@ CREATE TABLE IF NOT EXISTS channels (
     id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tenant_id           INT UNSIGNED NOT NULL,
     name                VARCHAR(150) NOT NULL,
+    -- Short code for naming patterns/snippets, e.g. "GA" for Google Ads, "FB" for Meta.
+    short_code          VARCHAR(20) NULL,
     default_utm_source  VARCHAR(100) NULL,
     default_utm_medium  VARCHAR(100) NULL,
     -- Relabels the Campaign form's utm_term field for this channel, e.g. "Keyword" for
@@ -223,6 +229,57 @@ CREATE TABLE IF NOT EXISTS channels (
     updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_channels_tenant_name (tenant_id, name),
     CONSTRAINT fk_channels_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
+-- Custom Variables -- tenant-defined data-layer keys beyond the built-in taxonomy
+-- above. Makes the app usable for any company's dataLayer shape, not just this one.
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS custom_variables (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    -- The {{token}} name used in Snippet Templates and Naming Convention patterns.
+    key_name     VARCHAR(100) NOT NULL,
+    label        VARCHAR(150) NOT NULL,
+    source_type  ENUM('static_list','free_text') NOT NULL DEFAULT 'free_text',
+    -- Which form(s) this variable shows up on -- keeps Tracking Configs and
+    -- Campaigns from both being cluttered with fields only relevant to one.
+    applies_to_tracking_config TINYINT(1) NOT NULL DEFAULT 1,
+    applies_to_campaign        TINYINT(1) NOT NULL DEFAULT 1,
+    description  VARCHAR(255) NULL,
+    sort_order   INT NOT NULL DEFAULT 0,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_custom_variables_tenant_key (tenant_id, key_name),
+    CONSTRAINT fk_custom_variables_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS custom_variable_options (
+    id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    custom_variable_id INT UNSIGNED NOT NULL,
+    value              VARCHAR(150) NOT NULL,
+    label              VARCHAR(150) NOT NULL,
+    sort_order         INT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_custom_variable_options_variable FOREIGN KEY (custom_variable_id) REFERENCES custom_variables(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One row per (entity, custom_variable) actually filled in on that entity. Polymorphic
+-- across entity types (tracking_config, campaign, ...) since MySQL can't FK a column to
+-- "whichever table entity_type says" -- the app layer (App\Models\CustomVariableValue)
+-- deletes orphaned rows itself when a tracking_config/campaign is deleted.
+CREATE TABLE IF NOT EXISTS custom_variable_values (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    entity_type         ENUM('tracking_config','campaign') NOT NULL,
+    entity_id           INT UNSIGNED NOT NULL,
+    custom_variable_id  INT UNSIGNED NOT NULL,
+    value               VARCHAR(255) NULL,
+    UNIQUE KEY uq_cv_values_entity_variable (entity_type, entity_id, custom_variable_id),
+    KEY idx_cv_values_entity (entity_type, entity_id),
+    CONSTRAINT fk_cv_values_variable FOREIGN KEY (custom_variable_id) REFERENCES custom_variables(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------------------------------------------------------
@@ -434,13 +491,39 @@ INSERT INTO traffic_types (tenant_id, code, name, description, created_by) VALUE
     (1, 'mar', 'Marketing', 'Standard inbound/outbound marketing traffic', 1),
     (1, 'abm', 'Account-Based Marketing', 'Traffic sourced from ABM campaigns', 1);
 
-INSERT INTO channels (tenant_id, name, default_utm_source, default_utm_medium, term_label, extra_param_labels, description, created_by) VALUES
-    (1, 'Google Ads - Search', 'google', 'cpc', 'Keyword', 'network,device,matchtype', 'RSAs and other keyword-targeted Search campaigns. Use {keyword}, {network}, {device}, {matchtype} ValueTrack parameters as the values.', 1),
-    (1, 'Google Ads - Display/PMax', 'google', 'display', NULL, 'placement,device', 'Display Network and Performance Max, which have no keyword targeting.', 1),
-    (1, 'Meta Ads', 'facebook', 'paid-social', 'Audience', 'placement,adset_name', 'Facebook/Instagram paid campaigns.', 1),
-    (1, 'LinkedIn Ads', 'linkedin', 'paid-social', NULL, 'campaign_id,creative_id', 'LinkedIn Campaign Manager.', 1),
-    (1, 'Email', 'newsletter', 'email', NULL, NULL, 'Outbound email/newsletter sends.', 1),
-    (1, 'Organic Social', NULL, 'social', NULL, NULL, 'Unpaid posts -- set utm_source per platform (linkedin, twitter, ...).', 1);
+INSERT INTO channels (tenant_id, name, short_code, default_utm_source, default_utm_medium, term_label, extra_param_labels, description, created_by) VALUES
+    (1, 'Google Ads - Search', 'GA', 'google', 'cpc', 'Keyword', 'network,device,matchtype', 'RSAs and other keyword-targeted Search campaigns. Use {keyword}, {network}, {device}, {matchtype} ValueTrack parameters as the values.', 1),
+    (1, 'Google Ads - Display/PMax', 'GDN', 'google', 'display', NULL, 'placement,device', 'Display Network and Performance Max, which have no keyword targeting.', 1),
+    (1, 'Meta Ads', 'FB', 'facebook', 'paid-social', 'Audience', 'placement,adset_name', 'Facebook/Instagram paid campaigns.', 1),
+    (1, 'LinkedIn Ads', 'LI', 'linkedin', 'paid-social', NULL, 'campaign_id,creative_id', 'LinkedIn Campaign Manager.', 1),
+    (1, 'Email', 'EM', 'newsletter', 'email', NULL, NULL, 'Outbound email/newsletter sends.', 1),
+    (1, 'Organic Social', 'ORG', NULL, 'social', NULL, NULL, 'Unpaid posts -- set utm_source per platform (linkedin, twitter, ...).', 1);
+
+-- Example Custom Variables, demonstrating a real campaign-naming convention:
+-- "PA1-DT-CPQ-GA-RSA-Traffic-Aug2026-V1" via a {{format}}/{{objective}}/{{date}}/{{version}}
+-- pattern (see the tenant's campaign_name_pattern below) alongside a
+-- tracking-config-only example (A/B test variant).
+INSERT INTO custom_variables (tenant_id, key_name, label, source_type, applies_to_tracking_config, applies_to_campaign, description, sort_order, created_by) VALUES
+    (1, 'format', 'Ad Format', 'static_list', 0, 1, 'e.g. RSA, DSA, Display, Video -- independent of Channel.', 1, 1),
+    (1, 'objective', 'Objective', 'static_list', 0, 1, 'What the campaign is optimizing for.', 2, 1),
+    (1, 'date', 'Campaign Date', 'free_text', 0, 1, 'e.g. Aug2026 -- free text so it can be a month, quarter, or launch date.', 3, 1),
+    (1, 'version', 'Version', 'free_text', 0, 1, 'e.g. V1, V2 -- bump when you relaunch the same campaign concept.', 4, 1),
+    (1, 'ab_test_variant', 'A/B Test Variant', 'static_list', 1, 0, 'Which variant this tracking config belongs to, if the page is split-tested.', 1, 1);
+
+INSERT INTO custom_variable_options (custom_variable_id, value, label, sort_order) VALUES
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='format'), 'RSA', 'Responsive Search Ad', 1),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='format'), 'DSA', 'Dynamic Search Ad', 2),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='format'), 'Display', 'Display', 3),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='format'), 'Video', 'Video', 4),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='format'), 'PMax', 'Performance Max', 5),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='objective'), 'Traffic', 'Traffic', 1),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='objective'), 'Leads', 'Leads', 2),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='objective'), 'Conversions', 'Conversions', 3),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='objective'), 'Awareness', 'Awareness', 4),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='ab_test_variant'), 'A', 'Variant A', 1),
+    ((SELECT id FROM custom_variables WHERE tenant_id=1 AND key_name='ab_test_variant'), 'B', 'Variant B', 2);
+
+UPDATE tenants SET campaign_name_pattern = 'PA{{seq}}-{{service_vertical}}-{{service_name}}-{{channel}}-{{format}}-{{objective}}-{{date}}-{{version}}' WHERE id = 1;
 
 INSERT INTO snippet_templates (tenant_id, key_name, name, template, is_default) VALUES
 (1, 'ga4', 'GA4 dataLayer push', 'window.dataLayer = window.dataLayer || [];

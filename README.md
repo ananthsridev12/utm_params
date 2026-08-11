@@ -29,13 +29,43 @@ ones to round the workflow out:
 | **Snippet Templates** | the sheet's hardcoded GA4/Zoho code blocks | per-tenant, editable, token-based (`{{form_id}}`, `{{service_vertical}}`, …) |
 | **Campaign / UTM Link Builder** | new | pick a Landing Page or type any URL, choose an Ad Channel to auto-fill source/medium and reveal channel-specific extra parameters (e.g. Google Ads `{keyword}`/`{device}`/`{matchtype}`), live-previews the generated URL |
 | **Ad Channels** | new | per-tenant channel presets (Google Ads Search, Meta Ads, LinkedIn Ads, Email, …) driving the Campaign builder's defaults |
+| **Custom Variables** | new | tenant-defined data-layer keys beyond the built-in taxonomy (add/remove freely, fixed-list or free-text), scoped to show on Tracking Configs, Campaigns, or both |
 | Users & Roles | new | Owner / Admin / Editor / Viewer per tenant |
-| Company Settings | new | tenant profile |
+| Company Settings | new | tenant profile + **Naming Conventions** (below) |
 | Super Admin | new | platform back office — list/suspend/reactivate tenant workspaces |
 
 All master-data modules include `status` (active/inactive), a description field, full
 audit trail (`created_by`/`updated_by`/timestamps), and CSV export. Landing Pages and
 Tracking Configurations also support CSV export for bulk review.
+
+## Universal by design: Custom Variables + Naming Conventions
+
+The taxonomy above (Verticals, Form Types, …) is just a starting point, not a hardcoded
+schema. Two mechanisms make the app fit any company's dataLayer and naming scheme without
+a code change:
+
+- **Custom Variables** (sidebar → Content → Custom Variables): add a variable for
+  anything your dataLayer needs that isn't already covered — an A/B test variant, an ad
+  format, a partner code — as a fixed list you manage or free text typed in each time.
+  Delete what you don't need. Each one becomes a `{{key_name}}` token usable in Snippet
+  Templates and Naming Conventions, and shows up as a field on Tracking Configurations
+  and/or Campaigns (your choice, per variable).
+- **Naming Conventions** (Company Settings): per-tenant `{{token}}` patterns control how
+  `form_id` and the Campaign name are built — same token syntax as Snippet Templates,
+  covering both the built-in taxonomy and your own Custom Variables. For example, given
+  Custom Variables `format`, `objective`, `date`, and `version`, the pattern
+  `PA{{seq}}-{{service_vertical}}-{{service_name}}-{{channel}}-{{format}}-{{objective}}-{{date}}-{{version}}`
+  produces `PA1-DT-CPQ-GA-RSA-Traffic-Aug2026-V1` — a real spreadsheet naming convention,
+  reproduced without a spreadsheet formula.
+
+## Roadmap
+
+- **GTM / GA4 integration.** Snippet Templates and Custom Variables already model an
+  arbitrary dataLayer shape token-by-token, which is what a future integration would
+  read from — e.g. pushing a Snippet Template as a GTM variable/tag definition via the
+  Tag Manager API, or pulling GA4's configured event names to seed Events automatically.
+  Not built yet; today the app only generates the JS snippets for you to paste into GTM
+  by hand.
 
 ## How multi-tenancy works
 

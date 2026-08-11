@@ -69,19 +69,23 @@ class SnippetTemplate
     /**
      * Builds the token => value map for a tracking_configs row that has
      * already been LEFT JOINed with its related taxonomy tables (see
-     * TrackingConfig::findWithRelations()).
+     * TrackingConfig::findWithRelations()). $customValues is key_name => value
+     * (see CustomVariableValue::forEntityByKey()) merged in so a tenant's own
+     * Custom Variables work as {{tokens}} exactly like the built-in ones --
+     * this is what makes Snippet Templates usable for any dataLayer shape.
      */
-    public static function buildContext(array $row): array
+    public static function buildContext(array $row, array $customValues = []): array
     {
         $jsString = fn(?string $v) => $v ? ("'" . addslashes($v) . "'") : 'null';
 
-        return [
+        $context = [
             'form_id'            => $row['form_id'] ?? '',
             'page_url'           => $row['page_url'] ?? '',
             'event_name'         => $row['event_name'] ?? '',
             'service_vertical'   => $row['vertical_short_code'] ?? '',
             'vertical_name'      => $row['vertical_name'] ?? '',
             'service'            => $row['service_slug'] ?? '',
+            'service_name'       => $row['service_name'] ?? '',
             'service_js'         => $jsString($row['service_slug'] ?? null),
             'lead_magnet_name'   => $row['lead_magnet_slug'] ?? '',
             'lead_magnet_name_js'=> $jsString($row['lead_magnet_slug'] ?? null),
@@ -93,5 +97,6 @@ class SnippetTemplate
             'page_type'          => $row['page_type_name'] ?? '',
             'page_type_short'    => $row['page_type_short_code'] ?? '',
         ];
+        return array_merge($context, $customValues);
     }
 }

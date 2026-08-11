@@ -6,10 +6,15 @@ if (!empty($record['extra_params'])) {
     $decoded = json_decode($record['extra_params'], true);
     if (is_array($decoded)) $existingExtraParams = $decoded;
 }
+$customValues = $customValues ?? [];
 $campaignData = [
     'channels' => $channelsJson,
     'landingPages' => array_column($landingPageOptions, null, 'id'),
+    'verticals' => array_column($verticalOptions, null, 'id'),
+    'services' => array_column($serviceOptions, null, 'id'),
     'existingExtraParams' => $existingExtraParams,
+    'namePattern' => $campaignNamePattern,
+    'nextSeq' => $nextSeq,
 ];
 ?>
 <div class="page-header"><h1><?= $mode === 'create' ? 'Build a' : 'Edit' ?> Campaign Link</h1></div>
@@ -19,6 +24,9 @@ $campaignData = [
     <div class="field">
       <label for="name">Campaign name (internal)</label>
       <input type="text" id="name" name="name" value="<?= e($record['name'] ?? '') ?>" required autofocus>
+      <?php if ($campaignNamePattern): ?>
+        <div class="hint">Auto-suggested from your <a href="<?= url('tenant-settings') ?>">Naming Convention</a> (only fills this in if it's still empty) as you fill in the fields below.</div>
+      <?php endif; ?>
       <?php if (!empty($errors['name'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['name']) ?></div><?php endif; ?>
     </div>
 
@@ -82,6 +90,30 @@ $campaignData = [
     </div>
 
     <div id="extra-params-container"></div>
+
+    <?php if (!empty($customVariables)): ?>
+    <div class="field">
+      <label>Additional details</label>
+      <div class="form-grid">
+        <?php foreach ($customVariables as $cv): ?>
+          <div class="field">
+            <label for="ccustom_<?= (int) $cv['id'] ?>"><?= e($cv['label']) ?></label>
+            <?php if ($cv['source_type'] === 'static_list'): ?>
+              <select id="ccustom_<?= (int) $cv['id'] ?>" name="custom_variables[<?= (int) $cv['id'] ?>]" data-custom-key="<?= e($cv['key_name']) ?>">
+                <option value="">— none —</option>
+                <?php foreach ($cv['options'] as $opt): ?>
+                  <option value="<?= e($opt['value']) ?>" <?= ($customValues[$cv['id']] ?? '') === $opt['value'] ? 'selected' : '' ?>><?= e($opt['label']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            <?php else: ?>
+              <input type="text" id="ccustom_<?= (int) $cv['id'] ?>" name="custom_variables[<?= (int) $cv['id'] ?>]" data-custom-key="<?= e($cv['key_name']) ?>" value="<?= e($customValues[$cv['id']] ?? '') ?>">
+            <?php endif; ?>
+            <?php if ($cv['description']): ?><div class="hint"><?= e($cv['description']) ?></div><?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
 
     <div class="form-actions">
       <button class="btn" type="submit">Save &amp; generate link</button>

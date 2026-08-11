@@ -38,6 +38,15 @@ class Tenant
         return $stmt->execute([$data['name'], $data['primary_domain'] ?: null, $id]);
     }
 
+    /** Naming Conventions: the {{token}} patterns used to build form_id and suggest a Campaign name. */
+    public static function updateNamingPatterns(int $id, string $trackingFormIdPattern, ?string $campaignNamePattern): bool
+    {
+        $stmt = Database::connection()->prepare(
+            'UPDATE tenants SET tracking_form_id_pattern = ?, campaign_name_pattern = ? WHERE id = ?'
+        );
+        return $stmt->execute([$trackingFormIdPattern, $campaignNamePattern ?: null, $id]);
+    }
+
     public static function all(): array
     {
         $stmt = Database::connection()->query(

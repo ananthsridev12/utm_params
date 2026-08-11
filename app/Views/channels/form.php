@@ -10,6 +10,11 @@
     </div>
     <div class="form-grid">
       <div class="field">
+        <label for="short_code">Short code</label>
+        <input type="text" id="short_code" name="short_code" value="<?= e($record['short_code'] ?? '') ?>" placeholder="e.g. GA">
+        <div class="hint">Used as the <code>{{channel}}</code> token in Naming Conventions (Company Settings), e.g. PA1-DT-CPQ-<strong>GA</strong>-RSA-...</div>
+      </div>
+      <div class="field">
         <label for="default_utm_source">Default utm_source</label>
         <input type="text" id="default_utm_source" name="default_utm_source" value="<?= e($record['default_utm_source'] ?? '') ?>" placeholder="e.g. google">
         <div class="hint">Pre-fills the Campaign form when this channel is picked (only if the field is still empty).</div>

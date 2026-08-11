@@ -5,6 +5,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var fields = ['landing_page_id', 'page_url', 'page_type_id', 'vertical_id', 'service_id',
     'lead_magnet_id', 'form_type_id', 'form_location_id', 'funnel_stage_id', 'event_id', 'traffic_type_id'];
+  var customFields = Array.prototype.slice.call(document.querySelectorAll('[data-custom-key]'));
   var formIdField = $('form_id');
   var formIdTouched = !!(formIdField && formIdField.value);
 
@@ -37,31 +38,27 @@
     });
   }
 
-  function slugify(s) {
-    return (s || '').toString().toLowerCase();
-  }
-
-  function buildFormId(v) {
-    var pageTypeShort = slugify(lookup(data.pageTypes, v.page_type_id, 'short_code'));
-    var verticalCode = slugify(lookup(data.verticals, v.vertical_id, 'short_code'));
-    var serviceSlug = slugify(lookup(data.services, v.service_id, 'slug'));
-    var formType = slugify(lookup(data.formTypes, v.form_type_id, 'name'));
-    var formLocation = slugify(lookup(data.formLocations, v.form_location_id, 'name'));
-    return [pageTypeShort, verticalCode, serviceSlug, formType, formLocation].join('-');
-  }
-
   function jsStr(v) { return v ? ("'" + String(v).replace(/'/g, "\\'") + "'") : 'null'; }
+
+  function customValues() {
+    var out = {};
+    customFields.forEach(function (el) {
+      out[el.getAttribute('data-custom-key')] = el.value || '';
+    });
+    return out;
+  }
 
   function buildContext(v) {
     var leadMagnetSlug = lookup(data.leadMagnets, v.lead_magnet_id, 'slug');
     var serviceSlug = lookup(data.services, v.service_id, 'slug');
-    return {
+    var ctx = {
       form_id: formIdField ? formIdField.value : '',
       page_url: v.page_url || '',
       event_name: lookup(data.events, v.event_id, 'name'),
       service_vertical: lookup(data.verticals, v.vertical_id, 'short_code'),
       vertical_name: lookup(data.verticals, v.vertical_id, 'name'),
       service: serviceSlug,
+      service_name: lookup(data.services, v.service_id, 'name'),
       service_js: jsStr(serviceSlug),
       lead_magnet_name: leadMagnetSlug,
       lead_magnet_name_js: jsStr(leadMagnetSlug),
@@ -73,6 +70,11 @@
       page_type: lookup(data.pageTypes, v.page_type_id, 'name'),
       page_type_short: lookup(data.pageTypes, v.page_type_id, 'short_code'),
     };
+    // Custom Variables merge in last, keyed by their own key_name -- same rule
+    // as App\Models\SnippetTemplate::buildContext() server-side.
+    var cv = customValues();
+    Object.keys(cv).forEach(function (k) { ctx[k] = cv[k]; });
+    return ctx;
   }
 
   function renderTemplate(tpl, ctx) {
@@ -81,12 +83,23 @@
     });
   }
 
+  // Mirrors TrackingConfigController::validate()'s server-side form_id build:
+  // render the tenant's Naming Convention pattern against the current field
+  // values, then lowercase/trim/collapse dashes into a clean slug.
+  function buildFormId(ctx) {
+    if (!data.formIdPattern) return '';
+    var raw = renderTemplate(data.formIdPattern, ctx).toLowerCase();
+    raw = raw.replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
+    return raw;
+  }
+
   function renderPreview() {
     var v = currentValues();
-    if (!formIdTouched && formIdField) {
-      formIdField.value = buildFormId(v);
-    }
     var ctx = buildContext(v);
+    if (!formIdTouched && formIdField) {
+      formIdField.value = buildFormId(ctx);
+      ctx.form_id = formIdField.value;
+    }
     var container = $('snippet-preview');
     if (!container) return;
     container.innerHTML = '';
@@ -131,6 +144,10 @@
       if (f === 'landing_page_id') applyLandingPage();
       renderPreview();
     });
+  });
+  customFields.forEach(function (el) {
+    el.addEventListener('change', renderPreview);
+    el.addEventListener('input', renderPreview);
   });
   if (formIdField) formIdField.addEventListener('input', renderPreview);
 

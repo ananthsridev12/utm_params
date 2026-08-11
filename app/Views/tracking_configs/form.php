@@ -7,18 +7,21 @@ $readOnly = !has_role('editor');
 // (app/assets/js/tracking-config.js). Keeps the preview instant with no
 // server round-trip, while validate() in TrackingConfigController remains
 // the authoritative, server-side source of truth on save.
+$customValues = $customValues ?? [];
 $tcData = [
-    'pageTypes'     => array_column($pageTypeOptions, null, 'id'),
-    'verticals'     => array_column($verticalOptions, null, 'id'),
-    'services'      => array_column($serviceOptions, null, 'id'),
-    'leadMagnets'   => array_column($leadMagnetOptions, null, 'id'),
-    'formTypes'     => array_column($formTypeOptions, null, 'id'),
-    'formLocations' => array_column($formLocationOptions, null, 'id'),
-    'funnelStages'  => array_column($funnelStageOptions, null, 'id'),
-    'events'        => array_column($eventOptions, null, 'id'),
-    'trafficTypes'  => array_column($trafficTypeOptions, null, 'id'),
-    'landingPages'  => array_column($landingPageOptions, null, 'id'),
-    'templates'     => array_map(fn($t) => ['key' => $t['key_name'], 'name' => $t['name'], 'template' => $t['template']], $snippetTemplates),
+    'pageTypes'      => array_column($pageTypeOptions, null, 'id'),
+    'verticals'      => array_column($verticalOptions, null, 'id'),
+    'services'       => array_column($serviceOptions, null, 'id'),
+    'leadMagnets'    => array_column($leadMagnetOptions, null, 'id'),
+    'formTypes'      => array_column($formTypeOptions, null, 'id'),
+    'formLocations'  => array_column($formLocationOptions, null, 'id'),
+    'funnelStages'   => array_column($funnelStageOptions, null, 'id'),
+    'events'         => array_column($eventOptions, null, 'id'),
+    'trafficTypes'   => array_column($trafficTypeOptions, null, 'id'),
+    'landingPages'   => array_column($landingPageOptions, null, 'id'),
+    'templates'      => array_map(fn($t) => ['key' => $t['key_name'], 'name' => $t['name'], 'template' => $t['template']], $snippetTemplates),
+    'customVariableKeys' => array_column($customVariables, 'key_name', 'id'),
+    'formIdPattern'  => $formIdPattern,
 ];
 ?>
 <div class="page-header"><h1><?= $mode === 'create' ? 'Add' : ($readOnly ? 'View' : 'Edit') ?> Tracking Configuration</h1></div>
@@ -139,10 +142,34 @@ $tcData = [
       </div>
     </div>
 
+    <?php if (!empty($customVariables)): ?>
+    <div class="field">
+      <label>Custom fields</label>
+      <div class="form-grid">
+        <?php foreach ($customVariables as $cv): ?>
+          <div class="field">
+            <label for="custom_<?= (int) $cv['id'] ?>"><?= e($cv['label']) ?></label>
+            <?php if ($cv['source_type'] === 'static_list'): ?>
+              <select id="custom_<?= (int) $cv['id'] ?>" name="custom_variables[<?= (int) $cv['id'] ?>]" data-custom-key="<?= e($cv['key_name']) ?>">
+                <option value="">— none —</option>
+                <?php foreach ($cv['options'] as $opt): ?>
+                  <option value="<?= e($opt['value']) ?>" <?= ($customValues[$cv['id']] ?? '') === $opt['value'] ? 'selected' : '' ?>><?= e($opt['label']) ?></option>
+                <?php endforeach; ?>
+              </select>
+            <?php else: ?>
+              <input type="text" id="custom_<?= (int) $cv['id'] ?>" name="custom_variables[<?= (int) $cv['id'] ?>]" data-custom-key="<?= e($cv['key_name']) ?>" value="<?= e($customValues[$cv['id']] ?? '') ?>">
+            <?php endif; ?>
+            <?php if ($cv['description']): ?><div class="hint"><?= e($cv['description']) ?></div><?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
+
     <div class="field">
       <label for="form_id">form_id <span class="text-muted" style="font-weight:400">(auto-suggested — edit if you need something different)</span></label>
       <input type="text" id="form_id" name="form_id" value="<?= e($record['form_id'] ?? '') ?>" placeholder="auto-generated from the fields above">
-      <div class="hint">Pattern: page_type_short-vertical-service-form_type-form_location. Must be unique in your workspace.</div>
+      <div class="hint">Built from your Naming Convention pattern (<a href="<?= url('tenant-settings') ?>">Company Settings</a>): <code><?= e($formIdPattern) ?></code>. Must be unique in your workspace.</div>
     </div>
     <div class="field">
       <label for="notes">Notes</label>

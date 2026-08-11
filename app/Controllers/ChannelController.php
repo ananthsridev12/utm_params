@@ -24,6 +24,7 @@ class ChannelController extends BaseController
 
         $data = [
             'name' => $name,
+            'short_code' => strtoupper(trim((string) ($input['short_code'] ?? ''))) ?: null,
             'default_utm_source' => trim((string) ($input['default_utm_source'] ?? '')) ?: null,
             'default_utm_medium' => trim((string) ($input['default_utm_medium'] ?? '')) ?: null,
             'term_label' => trim((string) ($input['term_label'] ?? '')) ?: null,
