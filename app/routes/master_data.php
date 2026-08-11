@@ -21,6 +21,7 @@ use App\Controllers\FunnelStageController;
 use App\Controllers\EventController;
 use App\Controllers\LeadMagnetController;
 use App\Controllers\TrafficTypeController;
+use App\Controllers\ChannelController;
 
 /** @var \App\Core\Router $router */
 
@@ -34,6 +35,7 @@ foreach ([
     'events' => EventController::class,
     'lead-magnets' => LeadMagnetController::class,
     'traffic-types' => TrafficTypeController::class,
+    'channels' => ChannelController::class,
 ] as $base => $controllerClass) {
     $router->get($base, [$controllerClass, 'index']);
     $router->get($base . '/create', [$controllerClass, 'create']);

@@ -1,0 +1,43 @@
+<div class="page-header">
+  <div>
+    <h1>Ad Channels</h1>
+    <p class="subtitle">Drive the Campaign / UTM Builder: pick a channel to auto-fill utm_source/medium, relabel the keyword field, and reveal channel-specific extra parameters.</p>
+  </div>
+  <div>
+    <a class="btn secondary" href="<?= url($routeBase . '/export') ?>">Export CSV</a>
+    <?php if (has_role('editor')): ?><a class="btn" href="<?= url($routeBase . '/create') ?>"><?= icon('plus') ?>Add Channel</a><?php endif; ?>
+  </div>
+</div>
+
+<div class="card">
+  <?php if (empty($records)): ?>
+    <div class="empty-state">No channels yet.</div>
+  <?php else: ?>
+  <table>
+    <thead><tr><th>Name</th><th>Default source / medium</th><th>Term label</th><th>Extra params</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+    <?php foreach ($records as $r): ?>
+      <tr>
+        <td>
+          <?= e($r['name']) ?>
+          <?php if ($r['description']): ?><div class="text-muted" style="font-size:11.5px;margin-top:2px"><?= e($r['description']) ?></div><?php endif; ?>
+        </td>
+        <td class="text-muted"><?= e($r['default_utm_source'] ?: '—') ?> / <?= e($r['default_utm_medium'] ?: '—') ?></td>
+        <td class="text-muted"><?= e($r['term_label'] ?: '—') ?></td>
+        <td class="text-muted"><?= e($r['extra_param_labels'] ?: '—') ?></td>
+        <td><?= status_badge($r['status']) ?></td>
+        <td class="table-actions">
+          <?php if (has_role('editor')): ?><a href="<?= url($routeBase . '/edit/' . $r['id']) ?>">Edit</a><?php endif; ?>
+          <?php if (has_role('admin')): ?>
+          <form method="post" action="<?= url($routeBase . '/delete/' . $r['id']) ?>" style="display:inline" data-confirm="Delete this channel?">
+            <?= csrf_field() ?>
+            <button class="link" type="submit">Delete</button>
+          </form>
+          <?php endif; ?>
+        </td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+  <?php endif; ?>
+</div>

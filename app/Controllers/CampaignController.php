@@ -2,7 +2,12 @@
 
 namespace App\Controllers;
 
+use App\Core\Auth;
+use App\Core\Request;
+use App\Core\View;
 use App\Models\Campaign;
+use App\Models\Channel;
+use App\Models\LandingPage;
 
 class CampaignController extends BaseController
 {
@@ -10,6 +15,32 @@ class CampaignController extends BaseController
     protected string $viewDir = 'campaigns';
     protected string $routeBase = 'campaigns';
     protected string $title = 'Campaign';
+
+    public function index(array $params = []): void
+    {
+        Auth::requireLogin();
+        View::render($this->viewDir . '/index', [
+            'title' => $this->title,
+            'routeBase' => $this->routeBase,
+            'records' => Campaign::allWithRelations(),
+        ]);
+    }
+
+    protected function extraViewData(): array
+    {
+        $channels = Channel::allActive();
+        return [
+            'channelOptions' => $channels,
+            'channelsJson' => array_map(fn($c) => [
+                'id' => (int) $c['id'],
+                'default_utm_source' => $c['default_utm_source'],
+                'default_utm_medium' => $c['default_utm_medium'],
+                'term_label' => $c['term_label'],
+                'extra_params' => Channel::parseExtraParamLabels($c['extra_param_labels']),
+            ], $channels),
+            'landingPageOptions' => LandingPage::forDropdown(),
+        ];
+    }
 
     protected function validate(array $input, ?int $id): array
     {
@@ -22,6 +53,7 @@ class CampaignController extends BaseController
         $utmTerm = trim((string) ($input['utm_term'] ?? ''));
         $utmContent = trim((string) ($input['utm_content'] ?? ''));
         $status = ($input['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
+        $toIntOrNull = fn($v) => ($v === null || $v === '') ? null : (int) $v;
 
         if ($name === '') $errors['name'] = 'Name is required.';
         if ($targetUrl === '' || !filter_var($targetUrl, FILTER_VALIDATE_URL)) {
@@ -30,6 +62,20 @@ class CampaignController extends BaseController
         if ($utmSource === '') $errors['utm_source'] = 'utm_source is required.';
         if ($utmMedium === '') $errors['utm_medium'] = 'utm_medium is required.';
         if ($utmCampaign === '') $errors['utm_campaign'] = 'utm_campaign is required.';
+
+        // Extra, channel-specific params come in as extra_params[key]=value from the
+        // dynamic fields the JS renders for the selected Channel (e.g. network, device).
+        $extraParamsRaw = Request::post('extra_params', []);
+        $extraParams = [];
+        if (is_array($extraParamsRaw)) {
+            foreach ($extraParamsRaw as $key => $value) {
+                $key = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $key);
+                $value = trim((string) $value);
+                if ($key !== '' && $value !== '') {
+                    $extraParams[$key] = $value;
+                }
+            }
+        }
 
         $generatedUrl = $targetUrl;
         if (empty($errors)) {
@@ -40,11 +86,14 @@ class CampaignController extends BaseController
                 'utm_term' => $utmTerm ?: null,
                 'utm_content' => $utmContent ?: null,
             ], fn($v) => $v !== null && $v !== '');
+            $query = array_merge($query, $extraParams);
             $separator = str_contains($targetUrl, '?') ? '&' : '?';
             $generatedUrl = $targetUrl . $separator . http_build_query($query);
         }
 
         $data = [
+            'landing_page_id' => $toIntOrNull($input['landing_page_id'] ?? null),
+            'channel_id' => $toIntOrNull($input['channel_id'] ?? null),
             'name' => $name,
             'target_url' => $targetUrl,
             'utm_source' => $utmSource,
@@ -52,6 +101,7 @@ class CampaignController extends BaseController
             'utm_campaign' => $utmCampaign,
             'utm_term' => $utmTerm ?: null,
             'utm_content' => $utmContent ?: null,
+            'extra_params' => $extraParams ? json_encode($extraParams) : null,
             'generated_url' => $generatedUrl,
             'status' => $status,
         ];

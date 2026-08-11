@@ -27,7 +27,8 @@ ones to round the workflow out:
 | **Landing Pages** | new | name, URL, type, owner, status (draft/live/archived) |
 | **Tracking Configurations** | `URL` sheet | links a page to the taxonomy, auto-builds a unique `form_id`, live-renders both tracking snippets |
 | **Snippet Templates** | the sheet's hardcoded GA4/Zoho code blocks | per-tenant, editable, token-based (`{{form_id}}`, `{{service_vertical}}`, …) |
-| **Campaign / UTM Link Builder** | new | utm_source/medium/campaign/term/content → a generated tracking URL |
+| **Campaign / UTM Link Builder** | new | pick a Landing Page or type any URL, choose an Ad Channel to auto-fill source/medium and reveal channel-specific extra parameters (e.g. Google Ads `{keyword}`/`{device}`/`{matchtype}`), live-previews the generated URL |
+| **Ad Channels** | new | per-tenant channel presets (Google Ads Search, Meta Ads, LinkedIn Ads, Email, …) driving the Campaign builder's defaults |
 | Users & Roles | new | Owner / Admin / Editor / Viewer per tenant |
 | Company Settings | new | tenant profile |
 | Super Admin | new | platform back office — list/suspend/reactivate tenant workspaces |
@@ -93,6 +94,15 @@ deploy. Short version:
 4. Import `database/schema.sql` via phpMyAdmin once.
 5. To deploy: **Manage** → **Pull or Deploy** tab → **Update from Remote**, then
    **Deploy HEAD Commit**. Repeat those two clicks after every push you want live.
+
+## Database migrations
+
+`database/schema.sql` is only imported once, on a brand new database. Any schema change
+made after that (like the Ad Channels module) ships as a numbered file under
+`database/migrations/` — import each one you haven't run yet, in order, the same way you
+imported `schema.sql` (phpMyAdmin → Import, or `mysql -u ... -p dbname < database/migrations/xxx.sql`).
+A fresh install that imports the current `schema.sql` already has everything and should
+skip files in `migrations/` entirely — each migration file says so at the top.
 
 ## Local development
 

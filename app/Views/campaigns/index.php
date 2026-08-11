@@ -14,11 +14,15 @@
     <div class="empty-state">No campaign links yet.</div>
   <?php else: ?>
   <table>
-    <thead><tr><th>Name</th><th>Source / Medium / Campaign</th><th>Generated URL</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Channel</th><th>Source / Medium / Campaign</th><th>Generated URL</th><th>Status</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($records as $r): ?>
       <tr>
-        <td><?= e($r['name']) ?></td>
+        <td>
+          <?= e($r['name']) ?>
+          <?php if (!empty($r['landing_page_name'])): ?><div class="text-muted" style="font-size:11.5px;margin-top:2px">→ <?= e($r['landing_page_name']) ?></div><?php endif; ?>
+        </td>
+        <td class="text-muted"><?= e($r['channel_name'] ?? '—') ?></td>
         <td class="text-muted"><?= e($r['utm_source']) ?> / <?= e($r['utm_medium']) ?> / <?= e($r['utm_campaign']) ?></td>
         <td>
           <div class="snippet-box mb-0">

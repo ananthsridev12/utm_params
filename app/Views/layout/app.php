@@ -9,6 +9,7 @@ $nav = [
         ['landing-pages', 'Landing Pages', 'browser'],
         ['tracking-configs', 'Tracking Configurations', 'code'],
         ['campaigns', 'Campaign / UTM Builder', 'link'],
+        ['channels', 'Ad Channels', 'broadcast'],
     ],
     'Taxonomy' => [
         ['verticals', 'Verticals', 'layers'],

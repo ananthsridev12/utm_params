@@ -202,6 +202,29 @@ CREATE TABLE IF NOT EXISTS traffic_types (
     CONSTRAINT fk_traffic_types_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS channels (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id           INT UNSIGNED NOT NULL,
+    name                VARCHAR(150) NOT NULL,
+    default_utm_source  VARCHAR(100) NULL,
+    default_utm_medium  VARCHAR(100) NULL,
+    -- Relabels the Campaign form's utm_term field for this channel, e.g. "Keyword" for
+    -- Google Ads Search, "Audience" for Meta Ads. Null keeps the generic "utm_term" label.
+    term_label          VARCHAR(60) NULL,
+    -- Comma-separated extra query-param names specific to this channel, e.g.
+    -- "network,device,matchtype" for Google Ads Search, "placement,adset_name" for Meta Ads.
+    -- Rendered as extra key/value inputs on the Campaign form and appended to generated_url.
+    extra_param_labels  VARCHAR(255) NULL,
+    description         VARCHAR(255) NULL,
+    status              ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by          INT UNSIGNED NULL,
+    updated_by          INT UNSIGNED NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_channels_tenant_name (tenant_id, name),
+    CONSTRAINT fk_channels_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ----------------------------------------------------------------------------
 -- Landing Pages
 -- ----------------------------------------------------------------------------
@@ -296,23 +319,31 @@ CREATE TABLE IF NOT EXISTS tracking_configs (
 -- ----------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS campaigns (
-    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    tenant_id     INT UNSIGNED NOT NULL,
-    name          VARCHAR(190) NOT NULL,
-    target_url    VARCHAR(255) NOT NULL,
-    utm_source    VARCHAR(100) NOT NULL,
-    utm_medium    VARCHAR(100) NOT NULL,
-    utm_campaign  VARCHAR(150) NOT NULL,
-    utm_term      VARCHAR(150) NULL,
-    utm_content   VARCHAR(150) NULL,
-    generated_url VARCHAR(500) NOT NULL,
-    status        ENUM('active','inactive') NOT NULL DEFAULT 'active',
-    created_by    INT UNSIGNED NULL,
-    updated_by    INT UNSIGNED NULL,
-    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id       INT UNSIGNED NOT NULL,
+    landing_page_id INT UNSIGNED NULL,
+    channel_id      INT UNSIGNED NULL,
+    name            VARCHAR(190) NOT NULL,
+    target_url      VARCHAR(255) NOT NULL,
+    utm_source      VARCHAR(100) NOT NULL,
+    utm_medium      VARCHAR(100) NOT NULL,
+    utm_campaign    VARCHAR(150) NOT NULL,
+    utm_term        VARCHAR(150) NULL,
+    utm_content     VARCHAR(150) NULL,
+    -- JSON object of channel-specific extra query params, e.g. {"network":"g","device":"m"}.
+    -- Stored as TEXT (not the JSON column type) for compatibility with older MySQL/MariaDB
+    -- on shared hosting; the app reads/writes it with json_encode/json_decode.
+    extra_params    TEXT NULL,
+    generated_url   VARCHAR(700) NOT NULL,
+    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by      INT UNSIGNED NULL,
+    updated_by      INT UNSIGNED NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_campaigns_tenant (tenant_id),
-    CONSTRAINT fk_campaigns_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+    CONSTRAINT fk_campaigns_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_campaigns_landing_page FOREIGN KEY (landing_page_id) REFERENCES landing_pages(id) ON DELETE SET NULL,
+    CONSTRAINT fk_campaigns_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
@@ -402,6 +433,14 @@ INSERT INTO lead_magnets (tenant_id, vertical_id, service_id, name, slug, create
 INSERT INTO traffic_types (tenant_id, code, name, description, created_by) VALUES
     (1, 'mar', 'Marketing', 'Standard inbound/outbound marketing traffic', 1),
     (1, 'abm', 'Account-Based Marketing', 'Traffic sourced from ABM campaigns', 1);
+
+INSERT INTO channels (tenant_id, name, default_utm_source, default_utm_medium, term_label, extra_param_labels, description, created_by) VALUES
+    (1, 'Google Ads - Search', 'google', 'cpc', 'Keyword', 'network,device,matchtype', 'RSAs and other keyword-targeted Search campaigns. Use {keyword}, {network}, {device}, {matchtype} ValueTrack parameters as the values.', 1),
+    (1, 'Google Ads - Display/PMax', 'google', 'display', NULL, 'placement,device', 'Display Network and Performance Max, which have no keyword targeting.', 1),
+    (1, 'Meta Ads', 'facebook', 'paid-social', 'Audience', 'placement,adset_name', 'Facebook/Instagram paid campaigns.', 1),
+    (1, 'LinkedIn Ads', 'linkedin', 'paid-social', NULL, 'campaign_id,creative_id', 'LinkedIn Campaign Manager.', 1),
+    (1, 'Email', 'newsletter', 'email', NULL, NULL, 'Outbound email/newsletter sends.', 1),
+    (1, 'Organic Social', NULL, 'social', NULL, NULL, 'Unpaid posts -- set utm_source per platform (linkedin, twitter, ...).', 1);
 
 INSERT INTO snippet_templates (tenant_id, key_name, name, template, is_default) VALUES
 (1, 'ga4', 'GA4 dataLayer push', 'window.dataLayer = window.dataLayer || [];
