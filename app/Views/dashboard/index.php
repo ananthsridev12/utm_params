@@ -1,3 +1,13 @@
+<?php
+$stats = [
+    ['landing_pages', 'Landing Pages', 'browser', 'landing-pages'],
+    ['tracking_configs', 'Tracking Configurations', 'code', 'tracking-configs'],
+    ['campaigns', 'Campaigns', 'link', 'campaigns'],
+    ['verticals', 'Verticals', 'layers', 'verticals'],
+    ['services', 'Services', 'briefcase', 'services'],
+    ['lead_magnets', 'Lead Magnets', 'gift', 'lead-magnets'],
+];
+?>
 <div class="page-header">
   <div>
     <h1>Dashboard</h1>
@@ -6,25 +16,31 @@
 </div>
 
 <div class="stat-grid">
-  <div class="stat-card"><div class="num"><?= (int) $counts['landing_pages'] ?></div><div class="label">Landing Pages</div></div>
-  <div class="stat-card"><div class="num"><?= (int) $counts['tracking_configs'] ?></div><div class="label">Tracking Configurations</div></div>
-  <div class="stat-card"><div class="num"><?= (int) $counts['campaigns'] ?></div><div class="label">Campaigns</div></div>
-  <div class="stat-card"><div class="num"><?= (int) $counts['verticals'] ?></div><div class="label">Verticals</div></div>
-  <div class="stat-card"><div class="num"><?= (int) $counts['services'] ?></div><div class="label">Services</div></div>
-  <div class="stat-card"><div class="num"><?= (int) $counts['lead_magnets'] ?></div><div class="label">Lead Magnets</div></div>
+  <?php foreach ($stats as [$key, $label, $iconName, $route]): ?>
+    <a class="stat-card" href="<?= url($route) ?>" style="color:inherit;text-decoration:none">
+      <div class="icon"><?= icon($iconName) ?></div>
+      <div>
+        <div class="num"><?= (int) $counts[$key] ?></div>
+        <div class="label"><?= e($label) ?></div>
+      </div>
+    </a>
+  <?php endforeach; ?>
 </div>
 
 <div class="card">
   <h2>Recent activity</h2>
   <?php if (empty($recentActivity)): ?>
-    <p class="text-muted mb-0">No activity yet. Start by adding a Vertical and a Landing Page.</p>
+    <div class="empty-state" style="padding:24px 0">
+      <?= icon('inbox') ?>
+      <p>No activity yet. Start by adding a Vertical and a Landing Page.</p>
+    </div>
   <?php else: ?>
     <table>
       <thead><tr><th>When</th><th>Who</th><th>Action</th></tr></thead>
       <tbody>
       <?php foreach ($recentActivity as $a): ?>
         <tr>
-          <td><?= e($a['created_at']) ?></td>
+          <td class="text-muted"><?= e($a['created_at']) ?></td>
           <td><?= e($a['user_name'] ?? 'System') ?></td>
           <td><?= e($a['description']) ?></td>
         </tr>
@@ -36,7 +52,7 @@
 
 <div class="card">
   <h2>Quick start</h2>
-  <ol>
+  <ol style="margin:0;padding-left:20px;color:var(--text-muted);line-height:2">
     <li>Review your <a href="<?= url('verticals') ?>">Verticals</a>, <a href="<?= url('services') ?>">Services</a> and other taxonomy lists — they're pre-filled with sample data.</li>
     <li>Add a <a href="<?= url('landing-pages') ?>">Landing Page</a>.</li>
     <li>Create a <a href="<?= url('tracking-configs') ?>">Tracking Configuration</a> for it to get its auto-generated form_id and tracking snippets.</li>
