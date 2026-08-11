@@ -72,6 +72,18 @@ Tracking Configurations also support CSV export for bulk review.
 
 No `composer install`, no build step, no queue/cron/Redis required.
 
+## Automated deploys (utm.easi7.in)
+
+`.github/workflows/deploy-cpanel.yml` FTP-deploys this repo to the `utm.easi7.in` cPanel
+account on every push to `main` (or manually from the Actions tab). It only uploads
+files tracked in git, never touches `config/config.php` or `storage/logs/`, and never
+runs the database import for you. Read the numbered setup steps in the workflow file's
+header comments once before the first run — you need to: set the subdomain's document
+root to its `public` folder, upload `config/config.php` by hand, import
+`database/schema.sql` once, and add the `FTP_SERVER` / `FTP_USERNAME` / `FTP_PASSWORD`
+repository secrets (plus an optional `CPANEL_SERVER_DIR` repository variable if the
+default path doesn't match your account layout).
+
 ## Local development
 
 ```bash
