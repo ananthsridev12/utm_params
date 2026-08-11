@@ -1,0 +1,23 @@
+# Root-level fallback for shared hosts where the account's document root
+# cannot be pointed at /public (e.g. no addon-domain custom docroot support).
+# It transparently serves everything from /public while keeping /app,
+# /config and /database out of the web-servable path in the normal setup.
+#
+# If your host DOES let you set the document root to the /public folder,
+# you can delete this file entirely and use public/.htaccess only.
+
+RewriteEngine On
+
+# Serve real files/dirs under /public directly (css/js/images).
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteCond %{DOCUMENT_ROOT}/public%{REQUEST_URI} -f
+RewriteRule ^(.*)$ /public/$1 [L]
+
+# Everything else goes through the front controller.
+RewriteCond %{REQUEST_URI} !^/public/
+RewriteRule ^(.*)$ /public/index.php?r=$1 [QSA,L]
+
+# Deny direct access to app internals if they end up web-accessible.
+<FilesMatch "\.(sql|log|md)$">
+    Require all denied
+</FilesMatch>

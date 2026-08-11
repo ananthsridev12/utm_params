@@ -1,0 +1,11 @@
+# The app's own URL helper (App\Core\Url) always links as index.php?r=...,
+# so pretty URLs below are optional. They just make the address bar nicer
+# and are safe to leave in even on hosts that ignore .htaccess.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php?r=$1 [QSA,L]
+</IfModule>
+
+Options -Indexes

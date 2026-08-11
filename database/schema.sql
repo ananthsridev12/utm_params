@@ -1,0 +1,431 @@
+-- ============================================================================
+-- UTM Tracking Taxonomy Manager -- MySQL/MariaDB schema
+-- Target: shared hosting (cPanel-style), MySQL 5.7+ / MariaDB 10.2+, InnoDB.
+-- Import this whole file once via phpMyAdmin (or `mysql -u ... -p db < schema.sql`).
+-- It creates all tables AND seeds one demo tenant with the taxonomy from the
+-- original UTM_Parameter.xlsx so the app is usable immediately after install.
+-- ============================================================================
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- ----------------------------------------------------------------------------
+-- Platform-level tables
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS tenants (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(150) NOT NULL,
+    slug            VARCHAR(150) NOT NULL,
+    primary_domain  VARCHAR(190) NULL,
+    status          ENUM('active','suspended') NOT NULL DEFAULT 'active',
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_tenants_slug (slug)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS users (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id       INT UNSIGNED NULL,
+    name            VARCHAR(150) NOT NULL,
+    email           VARCHAR(190) NOT NULL,
+    password_hash   VARCHAR(255) NOT NULL,
+    role            ENUM('owner','admin','editor','viewer') NOT NULL DEFAULT 'viewer',
+    is_super_admin  TINYINT(1) NOT NULL DEFAULT 0,
+    status          ENUM('active','disabled') NOT NULL DEFAULT 'active',
+    last_login_at   DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_users_email (email),
+    KEY idx_users_tenant (tenant_id),
+    CONSTRAINT fk_users_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id   INT UNSIGNED NOT NULL,
+    user_id     INT UNSIGNED NULL,
+    action      VARCHAR(20) NOT NULL,
+    entity_type VARCHAR(60) NOT NULL,
+    entity_id   INT UNSIGNED NULL,
+    description VARCHAR(255) NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_audit_tenant_created (tenant_id, created_at),
+    CONSTRAINT fk_audit_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
+-- Master-data (taxonomy) tables -- one per original sheet, tenant-scoped
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS verticals (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    short_code   VARCHAR(20) NOT NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_verticals_tenant_name (tenant_id, name),
+    UNIQUE KEY uq_verticals_tenant_code (tenant_id, short_code),
+    CONSTRAINT fk_verticals_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS services (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    vertical_id  INT UNSIGNED NULL,
+    name         VARCHAR(150) NOT NULL,
+    slug         VARCHAR(150) NOT NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_services_tenant_slug (tenant_id, slug),
+    KEY idx_services_vertical (vertical_id),
+    CONSTRAINT fk_services_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_services_vertical FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS page_types (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    short_code   VARCHAR(20) NOT NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_page_types_tenant_name (tenant_id, name),
+    CONSTRAINT fk_page_types_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS form_types (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_form_types_tenant_name (tenant_id, name),
+    CONSTRAINT fk_form_types_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS form_locations (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_form_locations_tenant_name (tenant_id, name),
+    CONSTRAINT fk_form_locations_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS funnel_stages (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    sort_order   INT NOT NULL DEFAULT 0,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_funnel_stages_tenant_name (tenant_id, name),
+    CONSTRAINT fk_funnel_stages_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS events (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_events_tenant_name (tenant_id, name),
+    CONSTRAINT fk_events_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS lead_magnets (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    vertical_id  INT UNSIGNED NULL,
+    service_id   INT UNSIGNED NULL,
+    name         VARCHAR(150) NOT NULL,
+    slug         VARCHAR(150) NOT NULL,
+    asset_url    VARCHAR(255) NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_lead_magnets_tenant_slug (tenant_id, slug),
+    KEY idx_lead_magnets_vertical (vertical_id),
+    KEY idx_lead_magnets_service (service_id),
+    CONSTRAINT fk_lead_magnets_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_lead_magnets_vertical FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL,
+    CONSTRAINT fk_lead_magnets_service FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS traffic_types (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    code         VARCHAR(20) NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    description  VARCHAR(255) NULL,
+    status       ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by   INT UNSIGNED NULL,
+    updated_by   INT UNSIGNED NULL,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_traffic_types_tenant_code (tenant_id, code),
+    CONSTRAINT fk_traffic_types_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
+-- Landing Pages
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS landing_pages (
+    id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id      INT UNSIGNED NOT NULL,
+    name           VARCHAR(190) NOT NULL,
+    url            VARCHAR(255) NOT NULL,
+    page_type_id   INT UNSIGNED NULL,
+    vertical_id    INT UNSIGNED NULL,
+    service_id     INT UNSIGNED NULL,
+    lead_magnet_id INT UNSIGNED NULL,
+    owner_user_id  INT UNSIGNED NULL,
+    status         ENUM('draft','live','archived') NOT NULL DEFAULT 'draft',
+    template       VARCHAR(150) NULL,
+    thumbnail_url  VARCHAR(255) NULL,
+    notes          TEXT NULL,
+    created_by     INT UNSIGNED NULL,
+    updated_by     INT UNSIGNED NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_landing_pages_tenant_url (tenant_id, url),
+    KEY idx_landing_pages_status (tenant_id, status),
+    CONSTRAINT fk_lp_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_lp_page_type FOREIGN KEY (page_type_id) REFERENCES page_types(id) ON DELETE SET NULL,
+    CONSTRAINT fk_lp_vertical FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL,
+    CONSTRAINT fk_lp_service FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL,
+    CONSTRAINT fk_lp_lead_magnet FOREIGN KEY (lead_magnet_id) REFERENCES lead_magnets(id) ON DELETE SET NULL,
+    CONSTRAINT fk_lp_owner FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
+-- Snippet Templates (tenant-editable, token-based)
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS snippet_templates (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id    INT UNSIGNED NOT NULL,
+    key_name     VARCHAR(60) NOT NULL,
+    name         VARCHAR(150) NOT NULL,
+    template     MEDIUMTEXT NOT NULL,
+    is_default   TINYINT(1) NOT NULL DEFAULT 0,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_snippet_templates_tenant_key (tenant_id, key_name),
+    CONSTRAINT fk_snippet_templates_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
+-- Tracking Configurations (the "URL" sheet)
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS tracking_configs (
+    id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id        INT UNSIGNED NOT NULL,
+    landing_page_id  INT UNSIGNED NULL,
+    page_url         VARCHAR(255) NOT NULL,
+    page_type_id     INT UNSIGNED NULL,
+    vertical_id      INT UNSIGNED NULL,
+    service_id       INT UNSIGNED NULL,
+    lead_magnet_id   INT UNSIGNED NULL,
+    form_type_id     INT UNSIGNED NULL,
+    form_location_id INT UNSIGNED NULL,
+    funnel_stage_id  INT UNSIGNED NULL,
+    event_id         INT UNSIGNED NULL,
+    traffic_type_id  INT UNSIGNED NULL,
+    form_id          VARCHAR(191) NOT NULL,
+    status           ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    notes            TEXT NULL,
+    created_by       INT UNSIGNED NULL,
+    updated_by       INT UNSIGNED NULL,
+    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_tracking_configs_tenant_formid (tenant_id, form_id),
+    KEY idx_tc_landing_page (landing_page_id),
+    CONSTRAINT fk_tc_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+    CONSTRAINT fk_tc_landing_page FOREIGN KEY (landing_page_id) REFERENCES landing_pages(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_page_type FOREIGN KEY (page_type_id) REFERENCES page_types(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_vertical FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_service FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_lead_magnet FOREIGN KEY (lead_magnet_id) REFERENCES lead_magnets(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_form_type FOREIGN KEY (form_type_id) REFERENCES form_types(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_form_location FOREIGN KEY (form_location_id) REFERENCES form_locations(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_funnel_stage FOREIGN KEY (funnel_stage_id) REFERENCES funnel_stages(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_event FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE SET NULL,
+    CONSTRAINT fk_tc_traffic_type FOREIGN KEY (traffic_type_id) REFERENCES traffic_types(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
+-- Campaigns / UTM Link Builder
+-- ----------------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS campaigns (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id     INT UNSIGNED NOT NULL,
+    name          VARCHAR(190) NOT NULL,
+    target_url    VARCHAR(255) NOT NULL,
+    utm_source    VARCHAR(100) NOT NULL,
+    utm_medium    VARCHAR(100) NOT NULL,
+    utm_campaign  VARCHAR(150) NOT NULL,
+    utm_term      VARCHAR(150) NULL,
+    utm_content   VARCHAR(150) NULL,
+    generated_url VARCHAR(500) NOT NULL,
+    status        ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    created_by    INT UNSIGNED NULL,
+    updated_by    INT UNSIGNED NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_campaigns_tenant (tenant_id),
+    CONSTRAINT fk_campaigns_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET FOREIGN_KEY_CHECKS = 1;
+
+-- ============================================================================
+-- Seed data: one demo tenant, populated from the original UTM_Parameter.xlsx
+-- Login: demo@solidpro-es.com / Passw0rd!
+-- ============================================================================
+
+INSERT INTO tenants (id, name, slug, primary_domain, status) VALUES
+    (1, 'Solidpro (Demo)', 'solidpro-demo', 'solidpro-es.com', 'active');
+
+-- Password hash below is bcrypt for "Passw0rd!" -- change immediately after first login.
+INSERT INTO users (id, tenant_id, name, email, password_hash, role, is_super_admin, status) VALUES
+    (1, 1, 'Demo Owner', 'demo@solidpro-es.com', '$2y$12$YF72Gs6Avr60tjH8GVxSK.mnmG3YhyKlZzSSYIxdLYqZAM/49V1Me', 'owner', 0, 'active'),
+    (2, NULL, 'Platform Admin', 'super@example.com', '$2y$12$YF72Gs6Avr60tjH8GVxSK.mnmG3YhyKlZzSSYIxdLYqZAM/49V1Me', 'owner', 1, 'active');
+
+INSERT INTO verticals (tenant_id, name, short_code, description, created_by) VALUES
+    (1, 'BFSI', 'BF', 'Banking, Financial Services & Insurance', 1),
+    (1, 'Digital Transformation', 'DT', NULL, 1),
+    (1, 'Energy & Utilities', 'EU', NULL, 1),
+    (1, 'Industrial Goods & Consumer Products', 'IGCP', NULL, 1),
+    (1, 'Healthcare and Lifesciences', 'HELIX', NULL, 1),
+    (1, 'Process Engineering', 'PE', NULL, 1),
+    (1, 'Structural Engineering', 'SE', NULL, 1),
+    (1, 'Innovation and SPM', 'SPM', NULL, 1),
+    (1, 'Sustainability', 'SUS', NULL, 1),
+    (1, 'Technical Publications', 'TP', NULL, 1),
+    (1, 'Global (cross-vertical)', 'GL', 'Used for pages that are not vertical-specific, e.g. /contact', 1);
+
+INSERT INTO services (tenant_id, vertical_id, name, slug, created_by) VALUES
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), 'Delivery Pods', 'delivery-pods', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), 'Enterprise Systems Integration', 'esi', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), 'CPQ', 'cpq', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), 'Digital Consulting', 'digital-consulting', 1);
+
+INSERT INTO page_types (tenant_id, name, short_code, created_by) VALUES
+    (1, 'contact_page', 'cp', 1),
+    (1, 'assessment_landing_page', 'lp', 1),
+    (1, 'entrydoor_landing_page', 'elp', 1),
+    (1, 'leadmagnet_landing_page', 'lp', 1),
+    (1, 'assessment_resource_page', 'lp', 1);
+
+INSERT INTO form_types (tenant_id, name, created_by) VALUES
+    (1, 'lead_magnet', 1),
+    (1, 'assessment', 1),
+    (1, 'discovery_call', 1),
+    (1, 'contact_form', 1),
+    (1, 'calendly_booking', 1),
+    (1, 'webinar', 1);
+
+INSERT INTO form_locations (tenant_id, name, created_by) VALUES
+    (1, 'header', 1),
+    (1, 'hero', 1),
+    (1, 'inline', 1),
+    (1, 'footer', 1),
+    (1, 'popup', 1),
+    (1, 'sidebar', 1),
+    (1, 'sticky_bar', 1),
+    (1, 'homepage', 1);
+
+INSERT INTO funnel_stages (tenant_id, name, sort_order, created_by) VALUES
+    (1, 'Awareness', 1, 1),
+    (1, 'Interest', 2, 1),
+    (1, 'Capture', 3, 1),
+    (1, 'MQL', 4, 1),
+    (1, 'SQL', 5, 1),
+    (1, 'Convert', 6, 1);
+
+INSERT INTO events (tenant_id, name, created_by) VALUES
+    (1, 'lead_submitted', 1),
+    (1, 'discovery_call_requested', 1),
+    (1, 'contact_form_submitted', 1),
+    (1, 'lead_magnet_submitted', 1),
+    (1, 'lead_tool_submitted', 1);
+
+INSERT INTO lead_magnets (tenant_id, vertical_id, service_id, name, slug, created_by) VALUES
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='cpq'), 'CPQ Readiness Assessment', 'cpq_readiness_assessment', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='cpq'), 'Quote Velocity Diagnostic', 'quote-velocity-diagnostic', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='esi'), 'Integration X-Ray', 'integration-x-ray', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='delivery-pods'), 'Cost of Unfilled Role Calculator', 'cost-of-unfilled-role-calculator', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='digital-consulting'), 'DM5 Factory Builder', 'dm5-factory-builder', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='esi'), 'Post-ERP Integration Checklist', 'post-erp-integration-checklist', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='digital-consulting'), 'Export Digital Readiness Guide', 'export-digital-readiness-guide', 1),
+    (1, (SELECT id FROM verticals WHERE tenant_id=1 AND short_code='DT'), (SELECT id FROM services WHERE tenant_id=1 AND slug='delivery-pods'), 'RaaS vs Hire Decision Guide', 'raas-vs-hire-decision-guide', 1);
+
+INSERT INTO traffic_types (tenant_id, code, name, description, created_by) VALUES
+    (1, 'mar', 'Marketing', 'Standard inbound/outbound marketing traffic', 1),
+    (1, 'abm', 'Account-Based Marketing', 'Traffic sourced from ABM campaigns', 1);
+
+INSERT INTO snippet_templates (tenant_id, key_name, name, template, is_default) VALUES
+(1, 'ga4', 'GA4 dataLayer push', 'window.dataLayer = window.dataLayer || [];
+window.dataLayer.push({
+  \'event\': \'{{event_name}}\',
+  \'page_url\': window.location.href,
+  \'service_vertical\': \'{{service_vertical}}\',
+  \'form_type\': \'{{form_type}}\',
+  \'form_location\': \'{{form_location}}\',
+  \'lead_magnet_name\': {{lead_magnet_name_js}},
+  \'funnel_stage\': \'{{funnel_stage}}\',
+  \'utm_source\': getTrafficSource(),
+  \'utm_campaign\': getUrlParam(\'utm_campaign\'),
+  \'utm_medium\': getUrlParam(\'utm_medium\')
+});', 1),
+(1, 'crm', 'CRM lead object', 'const leadData = {
+  form_id:      \'{{form_id}}\',
+  page_url:     window.location.href,
+  vertical:     \'{{service_vertical}}\',
+  service:      {{service_js}},
+  utm_source:   getUrlParam(\'utm_source\'),
+  utm_medium:   getUrlParam(\'utm_medium\'),
+  utm_campaign: getUrlParam(\'utm_campaign\'),
+  utm_cv:       getUrlParam(\'utm_cv\'),
+  utm_content:  getUrlParam(\'utm_content\'),
+  utm_term:     getUrlParam(\'utm_term\')
+};', 1);
