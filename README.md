@@ -78,6 +78,11 @@ a code change:
   runs on a single domain.
 - **Self-service signup**: registering creates a new company (tenant) and its first user
   as Owner, in one transaction.
+- **Invite links** (Users & Roles → Invite Link): an admin+ generates a shareable link
+  that lets teammates self-register into the *same* tenant, choosing their own password,
+  instead of always spinning up a new company. The link carries the role new joiners get
+  (Viewer/Editor/Admin) and can be regenerated (invalidating the old one) or disabled at
+  any time.
 - **Snippet Templates are per-tenant and editable** because every company's GA4/CRM setup
   differs — new tenants are seeded with two defaults that reproduce the original sheet's
   GA4 dataLayer push and its CRM lead-object snippet.
@@ -135,7 +140,7 @@ deploy. Short version:
 ## Database migrations
 
 `database/schema.sql` is only imported once, on a brand new database. Any schema change
-made after that (like the Ad Channels module) ships as a numbered file under
+made after that (like the Ad Channels module, or org invite links) ships as a numbered file under
 `database/migrations/` — import each one you haven't run yet, in order, the same way you
 imported `schema.sql` (phpMyAdmin → Import, or `mysql -u ... -p dbname < database/migrations/xxx.sql`).
 A fresh install that imports the current `schema.sql` already has everything and should

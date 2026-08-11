@@ -23,9 +23,18 @@ CREATE TABLE IF NOT EXISTS tenants (
     -- syntax as Snippet Templates (see App\Models\SnippetTemplate::render()).
     tracking_form_id_pattern  VARCHAR(255) NOT NULL DEFAULT '{{page_type_short}}-{{service_vertical}}-{{service}}-{{form_type}}-{{form_location}}',
     campaign_name_pattern     VARCHAR(255) NULL,
+    -- Org invite link (Users & Roles -> "Invite Link"): a single reusable
+    -- token per tenant that lets people self-register into THIS tenant
+    -- (choosing their own password) instead of always creating a new
+    -- company via /register. Regenerating replaces the token, invalidating
+    -- any previously shared link.
+    invite_token              VARCHAR(64) NULL,
+    invite_role               ENUM('admin','editor','viewer') NOT NULL DEFAULT 'viewer',
+    invite_enabled            TINYINT(1) NOT NULL DEFAULT 0,
     created_at                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at                DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_tenants_slug (slug)
+    UNIQUE KEY uq_tenants_slug (slug),
+    UNIQUE KEY uq_tenants_invite_token (invite_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS users (

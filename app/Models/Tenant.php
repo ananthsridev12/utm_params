@@ -61,4 +61,32 @@ class Tenant
         $stmt = Database::connection()->prepare('UPDATE tenants SET status = ? WHERE id = ?');
         return $stmt->execute([$status, $id]);
     }
+
+    /** Tenant whose invite link is active and matches this token, or null if disabled/unknown/suspended. */
+    public static function findByInviteToken(string $token): ?array
+    {
+        $stmt = Database::connection()->prepare(
+            "SELECT * FROM tenants WHERE invite_token = ? AND invite_enabled = 1 AND status = 'active' LIMIT 1"
+        );
+        $stmt->execute([$token]);
+        $row = $stmt->fetch();
+        return $row ?: null;
+    }
+
+    /** (Re)generates the invite token and sets the role it grants; enables the link. Returns the new token. */
+    public static function regenerateInviteLink(int $id, string $role): string
+    {
+        $token = bin2hex(random_bytes(20));
+        $stmt = Database::connection()->prepare(
+            'UPDATE tenants SET invite_token = ?, invite_role = ?, invite_enabled = 1 WHERE id = ?'
+        );
+        $stmt->execute([$token, $role, $id]);
+        return $token;
+    }
+
+    public static function disableInviteLink(int $id): bool
+    {
+        $stmt = Database::connection()->prepare('UPDATE tenants SET invite_enabled = 0 WHERE id = ?');
+        return $stmt->execute([$id]);
+    }
 }

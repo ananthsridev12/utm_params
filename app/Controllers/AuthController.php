@@ -147,6 +147,83 @@ class AuthController
         exit;
     }
 
+    public function showJoin(array $params): void
+    {
+        if (Auth::check()) {
+            header('Location: ' . Url::to('dashboard'));
+            exit;
+        }
+        $token = (string) ($params['token'] ?? '');
+        $tenant = Tenant::findByInviteToken($token);
+        if (!$tenant) {
+            View::render('auth/join', [
+                'title' => 'Join workspace',
+                'tenant' => null,
+                'token' => $token,
+                'old' => [],
+            ], 'layout/auth');
+            return;
+        }
+        View::render('auth/join', [
+            'title' => 'Join ' . $tenant['name'],
+            'tenant' => $tenant,
+            'token' => $token,
+            'old' => [],
+        ], 'layout/auth');
+    }
+
+    public function join(array $params): void
+    {
+        $token = (string) ($params['token'] ?? '');
+        $tenant = Tenant::findByInviteToken($token);
+        if (!$tenant) {
+            Flash::error('That invite link is invalid or has been disabled.');
+            header('Location: ' . Url::to('join/' . $token));
+            exit;
+        }
+        if (!Csrf::verifyRequest()) {
+            Flash::error('Your session expired, please try again.');
+            header('Location: ' . Url::to('join/' . $token));
+            exit;
+        }
+
+        $name = trim((string) Request::post('name'));
+        $email = trim((string) Request::post('email'));
+        $password = (string) Request::post('password');
+        $passwordConfirm = (string) Request::post('password_confirm');
+
+        $errors = [];
+        if ($name === '') $errors[] = 'Your name is required.';
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = 'Enter a valid email address.';
+        if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
+        if ($password !== $passwordConfirm) $errors[] = 'Passwords do not match.';
+        if ($email && User::emailExists($email)) $errors[] = 'That email is already registered.';
+
+        if (!empty($errors)) {
+            foreach ($errors as $e) Flash::error($e);
+            View::render('auth/join', [
+                'title' => 'Join ' . $tenant['name'],
+                'tenant' => $tenant,
+                'token' => $token,
+                'old' => ['name' => $name, 'email' => $email],
+            ], 'layout/auth');
+            return;
+        }
+
+        User::create([
+            'tenant_id' => $tenant['id'],
+            'name' => $name,
+            'email' => $email,
+            'password_hash' => password_hash($password, PASSWORD_BCRYPT),
+            'role' => $tenant['invite_role'],
+        ]);
+
+        Auth::attempt($email, $password);
+        Flash::success('Welcome to ' . $tenant['name'] . '!');
+        header('Location: ' . Url::to('dashboard'));
+        exit;
+    }
+
     private function seedDefaultSnippetTemplates($pdo, int $tenantId): void
     {
         $stmt = $pdo->prepare(

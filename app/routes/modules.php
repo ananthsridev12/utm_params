@@ -50,6 +50,8 @@ $router->get('users/edit/{id}', [UserController::class, 'edit']);
 $router->post('users/edit/{id}', [UserController::class, 'update']);
 $router->post('users/reset-password/{id}', [UserController::class, 'resetPassword']);
 $router->post('users/delete/{id}', [UserController::class, 'destroy']);
+$router->post('users/invite-link/generate', [UserController::class, 'generateInviteLink']);
+$router->post('users/invite-link/disable', [UserController::class, 'disableInviteLink']);
 
 // Tenant (company) settings.
 $router->get('tenant-settings', [TenantSettingsController::class, 'edit']);

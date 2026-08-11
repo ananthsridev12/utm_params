@@ -13,6 +13,12 @@ $router->get('logout', [AuthController::class, 'logout']);
 $router->get('register', [AuthController::class, 'showRegister']);
 $router->post('register', [AuthController::class, 'register']);
 
+// Org invite links: self-register into an EXISTING tenant via a shareable
+// token link (see Users & Roles -> Invite Link), instead of always
+// creating a new company via /register.
+$router->get('join/{token}', [AuthController::class, 'showJoin']);
+$router->post('join/{token}', [AuthController::class, 'join']);
+
 // Dashboard
 $router->get('dashboard', [DashboardController::class, 'index']);
 

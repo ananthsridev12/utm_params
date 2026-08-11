@@ -6,13 +6,16 @@ use App\Core\Auth;
 use App\Core\Csrf;
 use App\Core\Flash;
 use App\Core\Request;
+use App\Core\TenantContext;
 use App\Core\Url;
 use App\Core\View;
+use App\Models\Tenant;
 use App\Models\User;
 
 class UserController
 {
     private const ROLES = ['viewer', 'editor', 'admin', 'owner'];
+    private const INVITE_ROLES = ['viewer', 'editor', 'admin'];
 
     public function index(): void
     {
@@ -20,7 +23,37 @@ class UserController
         View::render('users/index', [
             'title' => 'Users & Roles',
             'records' => User::allForTenant(),
+            'tenant' => Tenant::find(TenantContext::requireTenant()),
         ]);
+    }
+
+    public function generateInviteLink(): void
+    {
+        Auth::requireRole('admin');
+        if (!Csrf::verifyRequest()) {
+            Flash::error('Your session expired, please try again.');
+            header('Location: ' . Url::to('users'));
+            exit;
+        }
+        $role = in_array(Request::post('invite_role'), self::INVITE_ROLES, true) ? Request::post('invite_role') : 'viewer';
+        Tenant::regenerateInviteLink(TenantContext::requireTenant(), $role);
+        Flash::success('Invite link generated. Anyone with the link can join as ' . ucfirst($role) . '.');
+        header('Location: ' . Url::to('users'));
+        exit;
+    }
+
+    public function disableInviteLink(): void
+    {
+        Auth::requireRole('admin');
+        if (!Csrf::verifyRequest()) {
+            Flash::error('Your session expired, please try again.');
+            header('Location: ' . Url::to('users'));
+            exit;
+        }
+        Tenant::disableInviteLink(TenantContext::requireTenant());
+        Flash::success('Invite link disabled. The old link no longer works.');
+        header('Location: ' . Url::to('users'));
+        exit;
     }
 
     public function create(): void
