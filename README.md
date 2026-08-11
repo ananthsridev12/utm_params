@@ -72,17 +72,27 @@ Tracking Configurations also support CSV export for bulk review.
 
 No `composer install`, no build step, no queue/cron/Redis required.
 
-## Automated deploys (utm.easi7.in)
+## Deploying via cPanel Git Version Control (utm.easi7.in)
 
-`.github/workflows/deploy-cpanel.yml` FTP-deploys this repo to the `utm.easi7.in` cPanel
-account on every push to `main` (or manually from the Actions tab). It only uploads
-files tracked in git, never touches `config/config.php` or `storage/logs/`, and never
-runs the database import for you. Read the numbered setup steps in the workflow file's
-header comments once before the first run — you need to: set the subdomain's document
-root to its `public` folder, upload `config/config.php` by hand, import
-`database/schema.sql` once, and add the `FTP_SERVER` / `FTP_USERNAME` / `FTP_PASSWORD`
-repository secrets (plus an optional `CPANEL_SERVER_DIR` repository variable if the
-default path doesn't match your account layout).
+`.cpanel.yml` at the repo root drives cPanel's native **Git™ Version Control** deploy
+feature — no FTP, no GitHub Actions, no credentials leaving the server. cPanel clones
+this repo on the server itself; clicking **Deploy HEAD Commit** in its UI runs the
+tasks in `.cpanel.yml`, which copy `app/`, `public/`, `database/` and `.htaccess` from
+whatever commit is checked out into the live app directory (`$HOME/utm.easi7.in/`). It
+never touches `config/config.php` or the database.
+
+Read the numbered setup comments at the top of `.cpanel.yml` once before the first
+deploy. Short version:
+
+1. cPanel → **Git™ Version Control** → Create → clone this repo (branch `main`) into a
+   working path like `repositories/utm_params` (NOT your live site folder).
+2. cPanel → **Domains** → set `utm.easi7.in`'s document root to `utm.easi7.in/public`.
+3. Upload `config/config.php` to `$HOME/utm.easi7.in/config/config.php` by hand once
+   (copied from `config/config.sample.php` with your real DB credentials) — it's
+   git-ignored on purpose and this deploy never overwrites it.
+4. Import `database/schema.sql` via phpMyAdmin once.
+5. To deploy: **Manage** → **Pull or Deploy** tab → **Update from Remote**, then
+   **Deploy HEAD Commit**. Repeat those two clicks after every push you want live.
 
 ## Local development
 

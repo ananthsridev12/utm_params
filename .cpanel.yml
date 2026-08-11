@@ -1,0 +1,50 @@
+---
+# cPanel Git Version Control deployment file for utm.easi7.in.
+#
+# This is cPanel's native git deploy mechanism (NOT GitHub Actions, NOT FTP):
+# cPanel clones/pulls this repo on the server itself, and clicking "Deploy
+# HEAD Commit" in its UI runs the tasks below, copying the checked-out HEAD
+# commit into the live app directory. Nothing ever leaves the server.
+#
+# One-time setup in cPanel:
+#
+# 1. cPanel -> Git(TM) Version Control -> Create.
+#      Clone URL:       https://github.com/ananthsridev12/utm_params.git
+#      Repository Path: repositories/utm_params   (cPanel's suggested default
+#                        is fine -- this is just the working clone, NOT the
+#                        live site; keep it separate from the deploy target
+#                        below so .git/ and this file are never web-exposed)
+#      Branch:           main   (or whichever branch you want live)
+#
+# 2. cPanel -> Domains -> edit utm.easi7.in -> set Document Root to:
+#      utm.easi7.in/public
+#    (relative to your home directory -- i.e. $HOME/utm.easi7.in/public).
+#    This is the DEPLOYPATH's public/ folder from the tasks below, so
+#    app/, config/ and database/ stay outside the web-servable path.
+#    If your account can't create the subdomain with that exact folder name,
+#    adjust DEPLOYPATH in the first task to match and re-set the doc root
+#    to match too.
+#
+# 3. Upload config/config.php to $HOME/utm.easi7.in/config/config.php ONCE,
+#    by hand (File Manager/SFTP), copied from config/config.sample.php with
+#    your real DB credentials and app.url. It's git-ignored on purpose, so
+#    it's never in this repo and this deployment never overwrites it.
+#
+# 4. Import database/schema.sql into your MySQL database once via phpMyAdmin
+#    (see README.md). Deployment never touches the database.
+#
+# 5. To deploy: cPanel -> Git Version Control -> Manage -> "Pull or Deploy"
+#    tab -> "Update from Remote" (fetches the latest commits) -> "Deploy
+#    HEAD Commit" (runs the tasks below against whatever commit is now
+#    checked out). Repeat those two clicks after every push you want live.
+
+deployment:
+  tasks:
+    - export DEPLOYPATH=$HOME/utm.easi7.in
+    - /bin/mkdir -p $DEPLOYPATH/config
+    - /bin/mkdir -p $DEPLOYPATH/storage/logs
+    - /bin/cp -R ./app $DEPLOYPATH/
+    - /bin/cp -R ./public $DEPLOYPATH/
+    - /bin/cp -R ./database $DEPLOYPATH/
+    - /bin/cp ./.htaccess $DEPLOYPATH/.htaccess
+    - /bin/cp ./config/config.sample.php $DEPLOYPATH/config/config.sample.php
