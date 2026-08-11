@@ -34,6 +34,26 @@ class LeadMagnetController extends BaseController
         ], $this->extraViewData()));
     }
 
+    public function exportCsv(array $params = []): void
+    {
+        Auth::requireLogin();
+        $rows = array_map(function ($r) {
+            return [
+                'id' => $r['id'],
+                'name' => $r['name'],
+                'slug' => $r['slug'],
+                'vertical' => $r['vertical_name'] ?? '',
+                'service' => $r['service_name'] ?? '',
+                'asset_url' => $r['asset_url'],
+                'description' => $r['description'],
+                'status' => $r['status'],
+                'created_at' => $r['created_at'],
+                'updated_at' => $r['updated_at'],
+            ];
+        }, LeadMagnet::allWithRelations());
+        $this->streamCsv('lead-magnets.csv', $rows);
+    }
+
     protected function validate(array $input, ?int $id): array
     {
         $errors = [];

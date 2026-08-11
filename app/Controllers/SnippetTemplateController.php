@@ -72,6 +72,7 @@ class SnippetTemplateController
         $name = trim((string) Request::post('name'));
         $template = (string) Request::post('template');
         $keyName = $id ? null : (Str::slugify(trim((string) Request::post('key_name'))) ?: Str::slugify($name));
+        $appliesToTrackingConfig = Request::post('applies_to_tracking_config') ? 1 : 0;
 
         $errors = [];
         if ($name === '') $errors['name'] = 'Name is required.';
@@ -82,17 +83,21 @@ class SnippetTemplateController
             View::render('snippet_templates/form', [
                 'title' => 'Snippet Templates',
                 'mode' => $id ? 'edit' : 'create',
-                'record' => array_merge(['id' => $id, 'name' => $name, 'template' => $template, 'key_name' => $keyName], []),
+                'record' => [
+                    'id' => $id, 'name' => $name, 'template' => $template, 'key_name' => $keyName,
+                    'applies_to_tracking_config' => $appliesToTrackingConfig,
+                ],
                 'errors' => $errors,
             ]);
             return;
         }
 
+        $data = ['name' => $name, 'template' => $template, 'applies_to_tracking_config' => $appliesToTrackingConfig];
         if ($id) {
-            SnippetTemplate::update($id, ['name' => $name, 'template' => $template]);
+            SnippetTemplate::update($id, $data);
             Flash::success('Snippet template updated.');
         } else {
-            SnippetTemplate::create(['name' => $name, 'template' => $template, 'key_name' => $keyName]);
+            SnippetTemplate::create($data + ['key_name' => $keyName]);
             Flash::success('Snippet template created.');
         }
         header('Location: ' . Url::to('snippet-templates'));

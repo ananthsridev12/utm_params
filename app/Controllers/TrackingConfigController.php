@@ -57,7 +57,7 @@ class TrackingConfigController extends BaseController
             'funnelStageOptions' => FunnelStage::allActive('sort_order ASC, name ASC'),
             'eventOptions' => $eventModel ? $eventModel::allActive() : [],
             'trafficTypeOptions' => TrafficType::allActive(),
-            'snippetTemplates' => SnippetTemplate::allForTenant(),
+            'snippetTemplates' => SnippetTemplate::forTrackingConfig(),
             'customVariables' => CustomVariable::allWithOptions(true, 'tracking_config'),
             'formIdPattern' => $tenant['tracking_form_id_pattern'] ?? '',
         ];
@@ -217,6 +217,73 @@ class TrackingConfigController extends BaseController
             }
         }
         CustomVariableValue::saveForEntity('tracking_config', $savedId, $values);
+    }
+
+    /** "Basic details" export -- form_id/page/event/status plus each applicable Snippet Template rendered as a column. */
+    public function exportCsv(array $params = []): void
+    {
+        Auth::requireLogin();
+        $this->streamCsv('tracking-configs.csv', $this->buildExportRows(false));
+    }
+
+    /** "Full details" export -- every resolved field/custom variable plus the same snippet columns. */
+    public function exportCsvFull(array $params = []): void
+    {
+        Auth::requireLogin();
+        $this->streamCsv('tracking-configs-full.csv', $this->buildExportRows(true));
+    }
+
+    private function buildExportRows(bool $full): array
+    {
+        $templates = SnippetTemplate::forTrackingConfig();
+        $customVariables = $full ? CustomVariable::allWithOptions(false, 'tracking_config') : [];
+
+        $rows = [];
+        foreach (TrackingConfig::allWithRelations() as $r) {
+            $customValuesByKey = CustomVariableValue::forEntityByKey('tracking_config', (int) $r['id']);
+
+            if ($full) {
+                $row = [
+                    'form_id' => $r['form_id'],
+                    'page_url' => $r['page_url'],
+                    'landing_page' => $r['landing_page_name'] ?? '',
+                    'page_type' => $r['page_type_name'] ?? '',
+                    'vertical' => $r['vertical_name'] ?? '',
+                    'service' => $r['service_name'] ?? '',
+                    'lead_magnet' => $r['lead_magnet_name_full'] ?? '',
+                    'form_type' => $r['form_type_name'] ?? '',
+                    'form_location' => $r['form_location_name'] ?? '',
+                    'funnel_stage' => $r['funnel_stage_name'] ?? '',
+                    'event_name' => $r['event_name'] ?? '',
+                    'traffic_type' => $r['traffic_type_name'] ?? '',
+                    'status' => $r['status'],
+                    'notes' => $r['notes'],
+                ];
+                foreach ($customVariables as $cv) {
+                    $row[$cv['label']] = $customValuesByKey[$cv['key_name']] ?? '';
+                }
+                $row['created_at'] = $r['created_at'];
+                $row['updated_at'] = $r['updated_at'];
+            } else {
+                $row = [
+                    'form_id' => $r['form_id'],
+                    'page_url' => $r['page_url'],
+                    'event_name' => $r['event_name'] ?? '',
+                    'funnel_stage' => $r['funnel_stage_name'] ?? '',
+                    'status' => $r['status'],
+                ];
+            }
+
+            if (!empty($templates)) {
+                $context = SnippetTemplate::buildContext($r, $customValuesByKey);
+                foreach ($templates as $tpl) {
+                    $row[$tpl['name']] = SnippetTemplate::render($tpl['template'], $context);
+                }
+            }
+
+            $rows[] = $row;
+        }
+        return $rows;
     }
 
     protected function redirectAfterSave(int $savedId): string

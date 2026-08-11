@@ -1,6 +1,7 @@
 <?php
 $record = $record ?? [];
 $errors = $errors ?? [];
+$readOnly = !has_role('editor');
 $existingExtraParams = [];
 if (!empty($record['extra_params'])) {
     $decoded = json_decode($record['extra_params'], true);
@@ -17,10 +18,11 @@ $campaignData = [
     'nextSeq' => $nextSeq,
 ];
 ?>
-<div class="page-header"><h1><?= $mode === 'create' ? 'Build a' : 'Edit' ?> Campaign Link</h1></div>
+<div class="page-header"><h1><?= $mode === 'create' ? 'Build a' : ($readOnly ? 'View' : 'Edit') ?> Campaign Link</h1></div>
 <div class="card" style="max-width:680px">
   <form method="post" action="<?= $mode === 'create' ? url($routeBase . '/create') : url($routeBase . '/edit/' . $record['id']) ?>" id="campaign-form">
     <?= csrf_field() ?>
+    <fieldset <?= $readOnly ? 'disabled' : '' ?> style="border:0;padding:0;margin:0">
     <div class="field">
       <label for="name">Campaign name (internal)</label>
       <input type="text" id="name" name="name" value="<?= e($record['name'] ?? '') ?>" required autofocus>
@@ -60,11 +62,14 @@ $campaignData = [
       <div class="field">
         <label for="utm_source">utm_source</label>
         <input type="text" id="utm_source" name="utm_source" value="<?= e($record['utm_source'] ?? '') ?>" placeholder="e.g. linkedin" required>
+        <div id="utm_source_suggestions" class="suggestion-chips"></div>
         <?php if (!empty($errors['utm_source'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['utm_source']) ?></div><?php endif; ?>
       </div>
       <div class="field">
         <label for="utm_medium">utm_medium</label>
         <input type="text" id="utm_medium" name="utm_medium" value="<?= e($record['utm_medium'] ?? '') ?>" placeholder="e.g. paid-social" required>
+        <div id="utm_medium_suggestions" class="suggestion-chips"></div>
+        <div class="hint">Pick a channel above to see the GA4-recommended values for it -- typing your own is fine too, but an unrecognized medium may not group into the report you expect.</div>
         <?php if (!empty($errors['utm_medium'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['utm_medium']) ?></div><?php endif; ?>
       </div>
       <div class="field">
@@ -75,6 +80,7 @@ $campaignData = [
       <div class="field">
         <label for="utm_term" id="utm_term_label">utm_term (optional)</label>
         <input type="text" id="utm_term" name="utm_term" value="<?= e($record['utm_term'] ?? '') ?>" placeholder="e.g. a keyword">
+        <?php if (!empty($errors['utm_term'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['utm_term']) ?></div><?php endif; ?>
       </div>
       <div class="field">
         <label for="utm_content">utm_content (optional)</label>
@@ -114,11 +120,14 @@ $campaignData = [
       </div>
     </div>
     <?php endif; ?>
+    </fieldset>
 
+    <?php if (!$readOnly): ?>
     <div class="form-actions">
       <button class="btn" type="submit">Save &amp; generate link</button>
       <a class="btn secondary" href="<?= url($routeBase) ?>">Cancel</a>
     </div>
+    <?php endif; ?>
   </form>
 
   <div class="field" style="margin-top:20px">

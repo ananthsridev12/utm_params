@@ -1,8 +1,9 @@
-<?php $record = $record ?? []; $errors = $errors ?? []; ?>
-<div class="page-header"><h1><?= $mode === 'create' ? 'Add' : 'Edit' ?> Landing Page</h1></div>
+<?php $record = $record ?? []; $errors = $errors ?? []; $readOnly = !has_role('editor'); ?>
+<div class="page-header"><h1><?= $mode === 'create' ? 'Add' : ($readOnly ? 'View' : 'Edit') ?> Landing Page</h1></div>
 <div class="card" style="max-width:760px">
   <form method="post" action="<?= $mode === 'create' ? url($routeBase . '/create') : url($routeBase . '/edit/' . $record['id']) ?>">
     <?= csrf_field() ?>
+    <fieldset <?= $readOnly ? 'disabled' : '' ?> style="border:0;padding:0;margin:0">
     <div class="field">
       <label for="name">Name</label>
       <input type="text" id="name" name="name" value="<?= e($record['name'] ?? '') ?>" required autofocus>
@@ -80,9 +81,13 @@
       <label for="notes">Notes</label>
       <textarea id="notes" name="notes" rows="3"><?= e($record['notes'] ?? '') ?></textarea>
     </div>
+    </fieldset>
+
+    <?php if (!$readOnly): ?>
     <div class="form-actions">
       <button class="btn" type="submit">Save</button>
       <a class="btn secondary" href="<?= url($routeBase) ?>">Cancel</a>
     </div>
+    <?php endif; ?>
   </form>
 </div>

@@ -17,6 +17,13 @@
     </div>
     <?php endif; ?>
     <div class="field">
+      <label style="display:flex;align-items:center;gap:7px;font-weight:400">
+        <input type="checkbox" name="applies_to_tracking_config" value="1" style="width:auto" <?= ($record === [] || !empty($record['applies_to_tracking_config'])) ? 'checked' : '' ?>>
+        Use this template for Tracking Configurations
+      </label>
+      <div class="hint">On: renders automatically in the Tracking Configuration snippet preview and CSV exports. Off: kept here (e.g. a draft or one-off) without showing up on every tracking config.</div>
+    </div>
+    <div class="field">
       <label for="template">Template</label>
       <textarea id="template" name="template" rows="14" class="code" required><?= e($record['template'] ?? '') ?></textarea>
       <div class="hint">Available tokens: <code>{{form_id}}</code> <code>{{page_url}}</code> <code>{{event_name}}</code> <code>{{service_vertical}}</code> <code>{{vertical_name}}</code> <code>{{service}}</code> <code>{{service_js}}</code> <code>{{lead_magnet_name}}</code> <code>{{lead_magnet_name_js}}</code> <code>{{form_type}}</code> <code>{{form_location}}</code> <code>{{funnel_stage}}</code> <code>{{traffic_type}}</code> <code>{{utm_cv}}</code> <code>{{page_type}}</code> <code>{{page_type_short}}</code>. The <code>_js</code> variants render as a quoted JS string or <code>null</code>.</div>

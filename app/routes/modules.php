@@ -25,6 +25,10 @@ foreach ([
     $router->get($base . '/export', [$controllerClass, 'exportCsv']);
 }
 
+// Tracking Configurations also get a second, richer export (full details + snippets)
+// alongside the basic-details-+-snippets one registered above.
+$router->get('tracking-configs/export-full', [TrackingConfigController::class, 'exportCsvFull']);
+
 // Snippet Templates -- custom shape (no delete-of-defaults, no CSV export).
 $router->get('snippet-templates', [SnippetTemplateController::class, 'index']);
 $router->get('snippet-templates/create', [SnippetTemplateController::class, 'create']);

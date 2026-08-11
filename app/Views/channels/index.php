@@ -14,7 +14,7 @@
     <div class="empty-state">No channels yet.</div>
   <?php else: ?>
   <table>
-    <thead><tr><th>Name</th><th>Code</th><th>Default source / medium</th><th>Term label</th><th>Extra params</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Name</th><th>Code</th><th>Recommended medium(s)</th><th>Keyword</th><th>Extra params</th><th>Status</th><th></th></tr></thead>
     <tbody>
     <?php foreach ($records as $r): ?>
       <tr>
@@ -23,8 +23,8 @@
           <?php if ($r['description']): ?><div class="text-muted" style="font-size:11.5px;margin-top:2px"><?= e($r['description']) ?></div><?php endif; ?>
         </td>
         <td><?php if ($r['short_code']): ?><code><?= e($r['short_code']) ?></code><?php else: ?><span class="text-muted">—</span><?php endif; ?></td>
-        <td class="text-muted"><?= e($r['default_utm_source'] ?: '—') ?> / <?= e($r['default_utm_medium'] ?: '—') ?></td>
-        <td class="text-muted"><?= e($r['term_label'] ?: '—') ?></td>
+        <td class="text-muted"><?= e($r['recommended_mediums'] ?: ($r['default_utm_medium'] ?: '—')) ?></td>
+        <td><?php if (!empty($r['requires_term'])): ?><span class="badge warn">Required</span><?php else: ?><span class="text-muted">Optional</span><?php endif; ?></td>
         <td class="text-muted"><?= e($r['extra_param_labels'] ?: '—') ?></td>
         <td><?= status_badge($r['status']) ?></td>
         <td class="table-actions">

@@ -9,7 +9,10 @@
 <?php foreach ($records as $r): ?>
   <div class="card">
     <div class="page-header" style="margin-bottom:10px">
-      <h3 class="mb-0"><?= e($r['name']) ?> <span class="text-muted" style="font-weight:400">(<?= e($r['key_name']) ?>)</span></h3>
+      <h3 class="mb-0">
+        <?= e($r['name']) ?> <span class="text-muted" style="font-weight:400">(<?= e($r['key_name']) ?>)</span>
+        <?php if (empty($r['applies_to_tracking_config'])): ?><span class="badge inactive">Not used on Tracking Configs</span><?php endif; ?>
+      </h3>
       <div class="table-actions">
         <?php if (has_role('admin')): ?>
           <a href="<?= url('snippet-templates/edit/' . $r['id']) ?>">Edit</a>

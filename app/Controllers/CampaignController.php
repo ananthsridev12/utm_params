@@ -47,7 +47,9 @@ class CampaignController extends BaseController
 
     public function edit(array $params): void
     {
-        Auth::requireRole($this->writeRole);
+        // Viewers may open this read-only to see the generated URL; the actual
+        // save (update()) still requires editor+ via BaseController.
+        Auth::requireLogin();
         $id = (int) $params['id'];
         $model = $this->modelClass;
         $record = $model::find($id);
@@ -78,7 +80,10 @@ class CampaignController extends BaseController
                 'short_code' => $c['short_code'],
                 'default_utm_source' => $c['default_utm_source'],
                 'default_utm_medium' => $c['default_utm_medium'],
+                'recommended_sources' => Channel::parseCsvList($c['recommended_sources']),
+                'recommended_mediums' => Channel::parseCsvList($c['recommended_mediums']),
                 'term_label' => $c['term_label'],
+                'requires_term' => (bool) $c['requires_term'],
                 'extra_params' => Channel::parseExtraParamLabels($c['extra_param_labels']),
             ], $channels),
             'landingPageOptions' => LandingPage::forDropdown(),
@@ -88,6 +93,44 @@ class CampaignController extends BaseController
             'campaignNamePattern' => $tenant['campaign_name_pattern'] ?? '',
             'nextSeq' => Campaign::nextSeq(),
         ];
+    }
+
+    public function exportCsv(array $params = []): void
+    {
+        Auth::requireLogin();
+        $customVariables = CustomVariable::allWithOptions(false, 'campaign');
+        $rows = array_map(function ($r) use ($customVariables) {
+            $extra = [];
+            if (!empty($r['extra_params'])) {
+                $decoded = json_decode($r['extra_params'], true);
+                if (is_array($decoded)) {
+                    foreach ($decoded as $k => $v) $extra[] = "{$k}={$v}";
+                }
+            }
+            $row = [
+                'id' => $r['id'],
+                'name' => $r['name'],
+                'channel' => $r['channel_name'] ?? '',
+                'landing_page' => $r['landing_page_name'] ?? '',
+                'target_url' => $r['target_url'],
+                'utm_source' => $r['utm_source'],
+                'utm_medium' => $r['utm_medium'],
+                'utm_campaign' => $r['utm_campaign'],
+                'utm_term' => $r['utm_term'],
+                'utm_content' => $r['utm_content'],
+                'extra_params' => implode('; ', $extra),
+                'generated_url' => $r['generated_url'],
+                'status' => $r['status'],
+            ];
+            $values = CustomVariableValue::forEntityByKey('campaign', (int) $r['id']);
+            foreach ($customVariables as $cv) {
+                $row[$cv['label']] = $values[$cv['key_name']] ?? '';
+            }
+            $row['created_at'] = $r['created_at'];
+            $row['updated_at'] = $r['updated_at'];
+            return $row;
+        }, Campaign::allWithRelations());
+        $this->streamCsv('campaigns.csv', $rows);
     }
 
     protected function validate(array $input, ?int $id): array
@@ -106,6 +149,14 @@ class CampaignController extends BaseController
         if ($name === '') $errors['name'] = 'Name is required.';
         if ($targetUrl === '' || !filter_var($targetUrl, FILTER_VALIDATE_URL)) {
             $errors['target_url'] = 'Enter a full valid URL, e.g. https://example.com/page.';
+        }
+
+        $channelId = $toIntOrNull($input['channel_id'] ?? null);
+        if ($channelId !== null && $utmTerm === '') {
+            $channel = Channel::find($channelId);
+            if ($channel && !empty($channel['requires_term'])) {
+                $errors['utm_term'] = ($channel['term_label'] ?: 'utm_term') . ' is required for ' . $channel['name'] . '.';
+            }
         }
         if ($utmSource === '') $errors['utm_source'] = 'utm_source is required.';
         if ($utmMedium === '') $errors['utm_medium'] = 'utm_medium is required.';
@@ -142,7 +193,7 @@ class CampaignController extends BaseController
 
         $data = [
             'landing_page_id' => $toIntOrNull($input['landing_page_id'] ?? null),
-            'channel_id' => $toIntOrNull($input['channel_id'] ?? null),
+            'channel_id' => $channelId,
             'name' => $name,
             'target_url' => $targetUrl,
             'utm_source' => $utmSource,

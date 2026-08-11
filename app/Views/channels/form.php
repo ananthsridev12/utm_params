@@ -24,9 +24,28 @@
         <input type="text" id="default_utm_medium" name="default_utm_medium" value="<?= e($record['default_utm_medium'] ?? '') ?>" placeholder="e.g. cpc">
       </div>
       <div class="field">
+        <label for="recommended_sources">Recommended utm_source values</label>
+        <input type="text" id="recommended_sources" name="recommended_sources" value="<?= e($record['recommended_sources'] ?? '') ?>" placeholder="e.g. google,youtube">
+        <div class="hint">Comma-separated. Shown as clickable suggestions on the Campaign form so people don't have to guess GA4-friendly values.</div>
+        <?php if (!empty($errors['recommended_sources'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['recommended_sources']) ?></div><?php endif; ?>
+      </div>
+      <div class="field">
+        <label for="recommended_mediums">Recommended utm_medium values</label>
+        <input type="text" id="recommended_mediums" name="recommended_mediums" value="<?= e($record['recommended_mediums'] ?? '') ?>" placeholder="e.g. cpc,ppc,paidsearch">
+        <div class="hint">Comma-separated, GA4-recognized mediums for this channel (e.g. <code>cpc,ppc,paidsearch</code> for paid search, <code>paid-social</code> for social ads) -- these decide which Default Channel Group the campaign lands in inside GA4 reports.</div>
+        <?php if (!empty($errors['recommended_mediums'])): ?><div class="hint" style="color:var(--danger)"><?= e($errors['recommended_mediums']) ?></div><?php endif; ?>
+      </div>
+      <div class="field">
         <label for="term_label">"Keyword" field label</label>
         <input type="text" id="term_label" name="term_label" value="<?= e($record['term_label'] ?? '') ?>" placeholder="e.g. Keyword, Audience">
         <div class="hint">Relabels utm_term on the Campaign form for this channel. Leave blank to keep the generic "utm_term" label.</div>
+      </div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:7px;font-weight:400">
+          <input type="checkbox" name="requires_term" value="1" style="width:auto" <?= !empty($record['requires_term']) ? 'checked' : '' ?>>
+          Keyword/utm_term is required for this channel
+        </label>
+        <div class="hint">Only keyword-targeted Search channels (Google/Bing Search) typically need this checked. Leave unchecked for Display, Social, Video, Email, etc. -- utm_term stays optional there.</div>
       </div>
       <div class="field">
         <label for="extra_param_labels">Extra parameters</label>

@@ -8,6 +8,7 @@ use App\Core\Flash;
 use App\Core\Request;
 use App\Core\Url;
 use App\Core\View;
+use App\Models\User;
 use PDOException;
 
 /**
@@ -181,10 +182,46 @@ abstract class BaseController
     {
         Auth::requireLogin();
         $model = $this->modelClass;
-        $rows = $model::all('id ASC');
+        $this->streamCsv($this->routeBase . '.csv', $this->resolveExportRows($model::all('id ASC')));
+    }
 
+    /**
+     * Strips columns that are meaningless outside the app (tenant_id is
+     * implicit -- the export IS one tenant's data) and swaps raw
+     * created_by/updated_by user IDs for the user's actual name, so a CSV
+     * export never shows a bare database ID where a human-readable value
+     * belongs. Override in a controller with its own foreign keys (e.g.
+     * vertical_id) to resolve those too -- see ServiceController for the
+     * pattern.
+     */
+    protected function resolveExportRows(array $rows): array
+    {
+        if (empty($rows)) {
+            return [];
+        }
+        $userNames = [];
+        foreach (User::allForTenant() as $u) {
+            $userNames[(int) $u['id']] = $u['name'];
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            unset($row['tenant_id']);
+            foreach (['created_by', 'updated_by'] as $col) {
+                if (array_key_exists($col, $row)) {
+                    $row[$col] = $row[$col] ? ($userNames[(int) $row[$col]] ?? '') : '';
+                }
+            }
+            $out[] = $row;
+        }
+        return $out;
+    }
+
+    /** Writes $rows (each an assoc array with the same keys) as a downloadable CSV. */
+    protected function streamCsv(string $filename, array $rows): void
+    {
         header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="' . $this->routeBase . '.csv"');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
 
         $out = fopen('php://output', 'w');
         if (!empty($rows)) {

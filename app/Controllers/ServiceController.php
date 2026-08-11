@@ -30,6 +30,24 @@ class ServiceController extends BaseController
         ], $this->extraViewData()));
     }
 
+    public function exportCsv(array $params = []): void
+    {
+        Auth::requireLogin();
+        $rows = array_map(function ($r) {
+            return [
+                'id' => $r['id'],
+                'name' => $r['name'],
+                'slug' => $r['slug'],
+                'vertical' => $r['vertical_name'] ?? '',
+                'description' => $r['description'],
+                'status' => $r['status'],
+                'created_at' => $r['created_at'],
+                'updated_at' => $r['updated_at'],
+            ];
+        }, Service::allWithVertical());
+        $this->streamCsv('services.csv', $rows);
+    }
+
     protected function validate(array $input, ?int $id): array
     {
         $errors = [];

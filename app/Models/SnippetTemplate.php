@@ -20,6 +20,21 @@ class SnippetTemplate
         return $stmt->fetchAll();
     }
 
+    /**
+     * Only the templates marked "applies to Tracking Configurations" -- used
+     * for the live preview and CSV exports so a draft/legacy/one-off template
+     * doesn't render on every single tracking config just because it exists.
+     */
+    public static function forTrackingConfig(): array
+    {
+        $tenantId = TenantContext::requireTenant();
+        $stmt = Database::connection()->prepare(
+            "SELECT * FROM snippet_templates WHERE tenant_id = ? AND applies_to_tracking_config = 1 ORDER BY name ASC"
+        );
+        $stmt->execute([$tenantId]);
+        return $stmt->fetchAll();
+    }
+
     public static function find(int $id): ?array
     {
         $tenantId = TenantContext::requireTenant();
@@ -33,9 +48,9 @@ class SnippetTemplate
     {
         $tenantId = TenantContext::requireTenant();
         $stmt = Database::connection()->prepare(
-            'INSERT INTO snippet_templates (tenant_id, key_name, name, template, is_default) VALUES (?, ?, ?, ?, 0)'
+            'INSERT INTO snippet_templates (tenant_id, key_name, name, template, is_default, applies_to_tracking_config) VALUES (?, ?, ?, ?, 0, ?)'
         );
-        $stmt->execute([$tenantId, $data['key_name'], $data['name'], $data['template']]);
+        $stmt->execute([$tenantId, $data['key_name'], $data['name'], $data['template'], $data['applies_to_tracking_config'] ? 1 : 0]);
         return (int) Database::connection()->lastInsertId();
     }
 
@@ -43,9 +58,9 @@ class SnippetTemplate
     {
         $tenantId = TenantContext::requireTenant();
         $stmt = Database::connection()->prepare(
-            'UPDATE snippet_templates SET name = ?, template = ? WHERE id = ? AND tenant_id = ?'
+            'UPDATE snippet_templates SET name = ?, template = ?, applies_to_tracking_config = ? WHERE id = ? AND tenant_id = ?'
         );
-        return $stmt->execute([$data['name'], $data['template'], $id, $tenantId]);
+        return $stmt->execute([$data['name'], $data['template'], $data['applies_to_tracking_config'] ? 1 : 0, $id, $tenantId]);
     }
 
     public static function delete(int $id): bool

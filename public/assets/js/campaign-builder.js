@@ -18,6 +18,8 @@
   var contentEl = $('utm_content');
   var extraContainer = $('extra-params-container');
   var preview = $('gen-url-preview');
+  var sourceSuggestions = $('utm_source_suggestions');
+  var mediumSuggestions = $('utm_medium_suggestions');
   var customFields = Array.prototype.slice.call(document.querySelectorAll('[data-custom-key]'));
 
   var currentExtraValues = Object.assign({}, data.existingExtraParams || {});
@@ -64,14 +66,43 @@
     extraContainer.appendChild(grid);
   }
 
+  // Clickable pills of GA4-recommended values for the selected channel, so people don't
+  // have to already know which utm_source/utm_medium strings GA4's Default Channel
+  // Grouping expects (e.g. "cpc" for paid search vs "paid-social" for social ads).
+  function renderSuggestionChips(container, values, targetInput) {
+    if (!container) return;
+    container.innerHTML = '';
+    (values || []).forEach(function (value) {
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'suggestion-chip';
+      chip.textContent = value;
+      if (targetInput.value === value) chip.classList.add('active');
+      chip.addEventListener('click', function () {
+        targetInput.value = value;
+        container.querySelectorAll('.suggestion-chip').forEach(function (c) { c.classList.remove('active'); });
+        chip.classList.add('active');
+        renderPreview();
+        suggestName();
+      });
+      container.appendChild(chip);
+    });
+  }
+
   function applyChannel(preserveExtraValues) {
     var channel = channelsById[channelEl.value];
     if (channel) {
       if (channel.default_utm_source && !sourceEl.value) sourceEl.value = channel.default_utm_source;
       if (channel.default_utm_medium && !mediumEl.value) mediumEl.value = channel.default_utm_medium;
-      termLabelEl.textContent = (channel.term_label || 'utm_term') + ' (optional)';
+      termLabelEl.textContent = (channel.term_label || 'utm_term') + (channel.requires_term ? ' *' : ' (optional)');
+      termEl.required = !!channel.requires_term;
+      renderSuggestionChips(sourceSuggestions, channel.recommended_sources, sourceEl);
+      renderSuggestionChips(mediumSuggestions, channel.recommended_mediums, mediumEl);
     } else {
       termLabelEl.textContent = 'utm_term (optional)';
+      termEl.required = false;
+      renderSuggestionChips(sourceSuggestions, [], sourceEl);
+      renderSuggestionChips(mediumSuggestions, [], mediumEl);
     }
     renderExtraParams(channel, preserveExtraValues);
     renderPreview();

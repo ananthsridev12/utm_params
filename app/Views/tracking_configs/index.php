@@ -4,7 +4,8 @@
     <p class="subtitle">One row per trackable form/event on a page — the source of truth for form_id slugs and tracking snippets.</p>
   </div>
   <div>
-    <a class="btn secondary" href="<?= url($routeBase . '/export') ?>">Export CSV</a>
+    <a class="btn secondary" href="<?= url($routeBase . '/export') ?>" title="form_id, page URL, event, funnel stage, status + snippets">Export (Basic + Snippets)</a>
+    <a class="btn secondary" href="<?= url($routeBase . '/export-full') ?>" title="Every resolved field and custom variable + snippets">Export (Full + Snippets)</a>
     <?php if (has_role('editor')): ?><a class="btn" href="<?= url($routeBase . '/create') ?>">Add Tracking Configuration</a><?php endif; ?>
   </div>
 </div>

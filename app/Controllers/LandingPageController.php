@@ -39,6 +39,49 @@ class LandingPageController extends BaseController
         ];
     }
 
+    public function exportCsv(array $params = []): void
+    {
+        Auth::requireLogin();
+        $rows = array_map(function ($r) {
+            return [
+                'id' => $r['id'],
+                'name' => $r['name'],
+                'url' => $r['url'],
+                'page_type' => $r['page_type_name'] ?? '',
+                'vertical' => $r['vertical_name'] ?? '',
+                'service' => $r['service_name'] ?? '',
+                'lead_magnet' => $r['lead_magnet_name'] ?? '',
+                'owner' => $r['owner_name'] ?? '',
+                'status' => $r['status'],
+                'template' => $r['template'],
+                'thumbnail_url' => $r['thumbnail_url'],
+                'notes' => $r['notes'],
+                'created_at' => $r['created_at'],
+                'updated_at' => $r['updated_at'],
+            ];
+        }, LandingPage::allWithRelations());
+        $this->streamCsv('landing-pages.csv', $rows);
+    }
+
+    public function edit(array $params): void
+    {
+        // Viewers may open this read-only; the actual save (update()) still
+        // requires editor+ via BaseController.
+        Auth::requireLogin();
+        $record = LandingPage::find((int) $params['id']);
+        if (!$record) {
+            http_response_code(404);
+            exit('Not found.');
+        }
+        View::render($this->viewDir . '/form', array_merge([
+            'title' => $this->title,
+            'routeBase' => $this->routeBase,
+            'mode' => 'edit',
+            'record' => $record,
+            'errors' => [],
+        ], $this->extraViewData()));
+    }
+
     protected function validate(array $input, ?int $id): array
     {
         $errors = [];

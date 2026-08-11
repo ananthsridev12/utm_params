@@ -214,9 +214,18 @@ CREATE TABLE IF NOT EXISTS channels (
     short_code          VARCHAR(20) NULL,
     default_utm_source  VARCHAR(100) NULL,
     default_utm_medium  VARCHAR(100) NULL,
+    -- Comma-separated GA4-recognized utm_source / utm_medium values commonly used with
+    -- this channel, e.g. "cpc,ppc,paidsearch" for Google Ads Search. Shown as clickable
+    -- suggestions on the Campaign form so users don't have to already know GA4's default
+    -- channel-grouping conventions.
+    recommended_sources VARCHAR(255) NULL,
+    recommended_mediums VARCHAR(255) NULL,
     -- Relabels the Campaign form's utm_term field for this channel, e.g. "Keyword" for
     -- Google Ads Search, "Audience" for Meta Ads. Null keeps the generic "utm_term" label.
     term_label          VARCHAR(60) NULL,
+    -- Only keyword-targeted Search channels actually need a keyword value -- everywhere
+    -- else utm_term is optional. Drives both client-side and server-side validation.
+    requires_term       TINYINT(1) NOT NULL DEFAULT 0,
     -- Comma-separated extra query-param names specific to this channel, e.g.
     -- "network,device,matchtype" for Google Ads Search, "placement,adset_name" for Meta Ads.
     -- Rendered as extra key/value inputs on the Campaign form and appended to generated_url.
@@ -325,6 +334,10 @@ CREATE TABLE IF NOT EXISTS snippet_templates (
     name         VARCHAR(150) NOT NULL,
     template     MEDIUMTEXT NOT NULL,
     is_default   TINYINT(1) NOT NULL DEFAULT 0,
+    -- Whether this template renders automatically in the Tracking Configuration preview
+    -- and CSV exports. Off lets a tenant keep a draft/legacy/one-off template around
+    -- without it showing up on every single tracking config.
+    applies_to_tracking_config TINYINT(1) NOT NULL DEFAULT 1,
     created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uq_snippet_templates_tenant_key (tenant_id, key_name),
@@ -491,13 +504,29 @@ INSERT INTO traffic_types (tenant_id, code, name, description, created_by) VALUE
     (1, 'mar', 'Marketing', 'Standard inbound/outbound marketing traffic', 1),
     (1, 'abm', 'Account-Based Marketing', 'Traffic sourced from ABM campaigns', 1);
 
-INSERT INTO channels (tenant_id, name, short_code, default_utm_source, default_utm_medium, term_label, extra_param_labels, description, created_by) VALUES
-    (1, 'Google Ads - Search', 'GA', 'google', 'cpc', 'Keyword', 'network,device,matchtype', 'RSAs and other keyword-targeted Search campaigns. Use {keyword}, {network}, {device}, {matchtype} ValueTrack parameters as the values.', 1),
-    (1, 'Google Ads - Display/PMax', 'GDN', 'google', 'display', NULL, 'placement,device', 'Display Network and Performance Max, which have no keyword targeting.', 1),
-    (1, 'Meta Ads', 'FB', 'facebook', 'paid-social', 'Audience', 'placement,adset_name', 'Facebook/Instagram paid campaigns.', 1),
-    (1, 'LinkedIn Ads', 'LI', 'linkedin', 'paid-social', NULL, 'campaign_id,creative_id', 'LinkedIn Campaign Manager.', 1),
-    (1, 'Email', 'EM', 'newsletter', 'email', NULL, NULL, 'Outbound email/newsletter sends.', 1),
-    (1, 'Organic Social', 'ORG', NULL, 'social', NULL, NULL, 'Unpaid posts -- set utm_source per platform (linkedin, twitter, ...).', 1);
+-- Short codes, source/medium recommendations, and requires_term follow GA4's default
+-- channel grouping conventions (Direct/Organic Search/Paid Search/Organic Social/Paid
+-- Social/Email/Affiliates/Referral/Display/Paid Other/Audio/SMS/Mobile Push/Video/Shopping)
+-- so campaigns built here land in the channel group you'd expect inside GA4 reports.
+INSERT INTO channels (tenant_id, name, short_code, default_utm_source, default_utm_medium, recommended_sources, recommended_mediums, term_label, requires_term, extra_param_labels, description, created_by) VALUES
+    (1, 'Google Ads - Search', 'GA', 'google', 'cpc', 'google', 'cpc,ppc,paidsearch', 'Keyword', 1, 'network,device,matchtype', 'RSAs and other keyword-targeted Search campaigns. Use {keyword}, {network}, {device}, {matchtype} ValueTrack parameters as the values.', 1),
+    (1, 'Google Ads - Display', 'GDN', 'google', 'display', 'google', 'display,cpm,banner', NULL, 0, 'placement,device', 'Display Network placements -- no keyword targeting.', 1),
+    (1, 'Google Ads - Video/YouTube', 'YT', 'google', 'video', 'google,youtube', 'paid-video,video,cpv', NULL, 0, 'placement,device', 'YouTube/video campaigns.', 1),
+    (1, 'Google Ads - Shopping/PMax', 'GSHOP', 'google', 'cpc', 'google', 'cpc,paidshopping', NULL, 0, 'device', 'Shopping and Performance Max -- no single keyword to attribute.', 1),
+    (1, 'Microsoft/Bing Ads', 'BING', 'bing', 'cpc', 'bing', 'cpc,ppc,paidsearch', 'Keyword', 1, 'device,matchtype', 'Keyword-targeted Bing/Microsoft Search campaigns.', 1),
+    (1, 'Meta Ads', 'FB', 'facebook', 'paid-social', 'facebook,instagram', 'paid-social,cpc', 'Audience', 0, 'placement,adset_name', 'Facebook/Instagram paid campaigns.', 1),
+    (1, 'LinkedIn Ads', 'LI', 'linkedin', 'paid-social', 'linkedin', 'paid-social,cpc', NULL, 0, 'campaign_id,creative_id', 'LinkedIn Campaign Manager.', 1),
+    (1, 'TikTok Ads', 'TT', 'tiktok', 'paid-social', 'tiktok', 'paid-social,cpc', NULL, 0, 'placement', 'TikTok Ads Manager.', 1),
+    (1, 'Twitter/X Ads', 'X', 'twitter', 'paid-social', 'twitter,x', 'paid-social,cpc', NULL, 0, NULL, 'X (Twitter) Ads.', 1),
+    (1, 'Pinterest Ads', 'PIN', 'pinterest', 'paid-social', 'pinterest', 'paid-social,cpc', NULL, 0, NULL, 'Pinterest Ads Manager.', 1),
+    (1, 'Reddit Ads', 'RDT', 'reddit', 'paid-social', 'reddit', 'paid-social,cpc', NULL, 0, NULL, 'Reddit Ads.', 1),
+    (1, 'Organic Social', 'ORG', NULL, 'social', 'linkedin,twitter,facebook,instagram', 'social,organic-social', NULL, 0, NULL, 'Unpaid posts -- set utm_source per platform.', 1),
+    (1, 'Organic Search', 'ORGS', NULL, 'organic', 'google,bing,yahoo', 'organic', NULL, 0, NULL, 'Rarely tagged manually -- GA4 detects this automatically. Only use for special tracking cases.', 1),
+    (1, 'Email', 'EM', 'newsletter', 'email', NULL, 'email', NULL, 0, NULL, 'Outbound email/newsletter sends.', 1),
+    (1, 'Affiliate', 'AFF', NULL, 'affiliate', NULL, 'affiliate', NULL, 0, NULL, 'Affiliate/partner-driven traffic.', 1),
+    (1, 'Referral / Partner', 'REF', NULL, 'referral', NULL, 'referral', NULL, 0, NULL, 'Co-marketing, partner links, other sites linking to you.', 1),
+    (1, 'SMS', 'SMS', 'sms', 'sms', NULL, 'sms', NULL, 0, NULL, 'Text message campaigns.', 1),
+    (1, 'Display / Programmatic (other)', 'DISP', NULL, 'display', NULL, 'display,cpm,programmatic', NULL, 0, 'placement,device', 'Any programmatic/display network not covered above.', 1);
 
 -- Example Custom Variables, demonstrating a real campaign-naming convention:
 -- "PA1-DT-CPQ-GA-RSA-Traffic-Aug2026-V1" via a {{format}}/{{objective}}/{{date}}/{{version}}

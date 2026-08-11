@@ -32,7 +32,7 @@
         </td>
         <td><?= status_badge($r['status']) ?></td>
         <td class="table-actions">
-          <?php if (has_role('editor')): ?><a href="<?= url($routeBase . '/edit/' . $r['id']) ?>">Edit</a><?php endif; ?>
+          <a href="<?= url($routeBase . '/edit/' . $r['id']) ?>"><?= has_role('editor') ? 'Edit' : 'View' ?></a>
           <?php if (has_role('admin')): ?>
           <form method="post" action="<?= url($routeBase . '/delete/' . $r['id']) ?>" style="display:inline" data-confirm="Delete this campaign?">
             <?= csrf_field() ?>
