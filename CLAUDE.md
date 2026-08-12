@@ -142,6 +142,9 @@ documented at the top as "only run on a pre-existing DB." Run them in order:
    `%7B`/`%7D` in already-saved `generated_url` values
 5. `2026_09_08_org_invite_links.sql` — `tenants.invite_token`/`invite_role`/
    `invite_enabled`
+6. `2026_09_15_campaign_seq_number.sql` — `tenants.next_campaign_seq` +
+   `campaigns.seq_number`, backfilled so the {{seq}} naming-pattern token
+   stops reusing numbers after a campaign is deleted
 
 ## Local development
 

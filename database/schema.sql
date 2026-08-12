@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS tenants (
     -- syntax as Snippet Templates (see App\Models\SnippetTemplate::render()).
     tracking_form_id_pattern  VARCHAR(255) NOT NULL DEFAULT '{{page_type_short}}-{{service_vertical}}-{{service}}-{{form_type}}-{{form_location}}',
     campaign_name_pattern     VARCHAR(255) NULL,
+    -- Persisted, tenant-scoped counter for the {{seq}} campaign-naming token.
+    -- Only incremented at actual campaign-creation time (never on delete),
+    -- so a number is never reused once assigned -- see campaigns.seq_number.
+    next_campaign_seq         INT UNSIGNED NOT NULL DEFAULT 1,
     -- Org invite link (Users & Roles -> "Invite Link"): a single reusable
     -- token per tenant that lets people self-register into THIS tenant
     -- (choosing their own password) instead of always creating a new
@@ -407,6 +411,10 @@ CREATE TABLE IF NOT EXISTS campaigns (
     -- straight off the clicked URL via getUrlParam('utm_cv'), so it has to actually be a
     -- query param on the link the Campaign builder generates.
     traffic_type_id INT UNSIGNED NULL,
+    -- The number permanently assigned to this campaign at creation time from
+    -- tenants.next_campaign_seq; immutable afterward (mirrors form_id's
+    -- "must stay stable" rule -- see tenant_settings/edit.php).
+    seq_number      INT UNSIGNED NULL,
     name            VARCHAR(190) NOT NULL,
     target_url      VARCHAR(255) NOT NULL,
     utm_source      VARCHAR(100) NOT NULL,
