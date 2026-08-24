@@ -239,6 +239,12 @@ CREATE TABLE IF NOT EXISTS channels (
     -- "network,device,matchtype" for Google Ads Search, "placement,adset_name" for Meta Ads.
     -- Rendered as extra key/value inputs on the Campaign form and appended to generated_url.
     extra_param_labels  VARCHAR(255) NULL,
+    -- Which fixed "full campaign details" form the Campaign builder shows for
+    -- campaigns under this channel (Google Ads / Meta Ads / LinkedIn Ads have
+    -- genuinely different settings -- budget/bidding/targeting/keywords --
+    -- so the form is a fixed block per platform, not one generic form).
+    -- 'other' (email, organic, referral, ...) shows no ad-platform settings.
+    platform_type       ENUM('google_ads','meta_ads','linkedin_ads','other') NOT NULL DEFAULT 'other',
     description         VARCHAR(255) NULL,
     status              ENUM('active','inactive') NOT NULL DEFAULT 'active',
     created_by          INT UNSIGNED NULL,
@@ -420,6 +426,35 @@ CREATE TABLE IF NOT EXISTS campaigns (
     extra_params    TEXT NULL,
     generated_url   VARCHAR(700) NOT NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+
+    -- ---- Full campaign brief (Draft/for-approval ad-platform details) ----
+    -- Common across every platform -- budget/schedule concepts every ad
+    -- platform has, so one shared set of columns rather than duplicating
+    -- per-platform. Which platform-specific fixed form below actually wrote
+    -- objective/bidding_strategy/bid_amount is decided server-side from the
+    -- channel's platform_type, not trusted from the client.
+    objective          VARCHAR(100) NULL,
+    budget_type        ENUM('daily','lifetime') NULL,
+    budget_amount      DECIMAL(12,2) NULL,
+    currency           VARCHAR(10) NULL DEFAULT 'USD',
+    bidding_strategy   VARCHAR(100) NULL,
+    bid_amount         DECIMAL(12,2) NULL,
+    start_date         DATE NULL,
+    end_date           DATE NULL,
+    -- Google Ads (also used for Microsoft/Bing Ads, whose Search campaign
+    -- structure is functionally the same) -- Search/Display/Video/Shopping.
+    google_campaign_type VARCHAR(50) NULL,
+    google_networks      VARCHAR(255) NULL, -- comma list: search_network,display_network,search_partners
+    google_languages     VARCHAR(255) NULL, -- comma list, e.g. "English,Spanish"
+    google_devices       VARCHAR(100) NULL, -- comma list: desktop,mobile,tablet
+    -- Meta Ads (Facebook/Instagram).
+    meta_buying_type   VARCHAR(50) NULL,
+    meta_placements    VARCHAR(255) NULL, -- comma list: feed,stories,reels,audience_network,marketplace,right_column
+    meta_ad_format     VARCHAR(50) NULL,
+    -- LinkedIn Ads.
+    linkedin_ad_format VARCHAR(50) NULL,
+    linkedin_bid_type  VARCHAR(50) NULL,
+
     created_by      INT UNSIGNED NULL,
     updated_by      INT UNSIGNED NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -429,6 +464,33 @@ CREATE TABLE IF NOT EXISTS campaigns (
     CONSTRAINT fk_campaigns_landing_page FOREIGN KEY (landing_page_id) REFERENCES landing_pages(id) ON DELETE SET NULL,
     CONSTRAINT fk_campaigns_channel FOREIGN KEY (channel_id) REFERENCES channels(id) ON DELETE SET NULL,
     CONSTRAINT fk_campaigns_traffic_type FOREIGN KEY (traffic_type_id) REFERENCES traffic_types(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Google Ads (Search) keyword targeting -- repeatable rows, one campaign has many.
+CREATE TABLE IF NOT EXISTS campaign_keywords (
+    id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    campaign_id   INT UNSIGNED NOT NULL,
+    keyword       VARCHAR(190) NOT NULL,
+    match_type    ENUM('broad','phrase','exact') NOT NULL DEFAULT 'broad',
+    is_negative   TINYINT(1) NOT NULL DEFAULT 0,
+    sort_order    INT UNSIGNED NOT NULL DEFAULT 0,
+    KEY idx_campaign_keywords_campaign (campaign_id),
+    CONSTRAINT fk_campaign_keywords_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Meta/LinkedIn audience targeting -- repeatable criterion_type/value rows,
+-- e.g. ('location','United States'), ('job_title','VP of Marketing'). Kept as
+-- one generic table (not one per platform) since the shape is identical; the
+-- Campaign form only shows the criterion_type options relevant to the
+-- selected channel's platform.
+CREATE TABLE IF NOT EXISTS campaign_targeting (
+    id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    campaign_id     INT UNSIGNED NOT NULL,
+    criterion_type  VARCHAR(60) NOT NULL,
+    criterion_value VARCHAR(255) NOT NULL,
+    sort_order      INT UNSIGNED NOT NULL DEFAULT 0,
+    KEY idx_campaign_targeting_campaign (campaign_id),
+    CONSTRAINT fk_campaign_targeting_campaign FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;
@@ -542,6 +604,15 @@ INSERT INTO channels (tenant_id, name, short_code, default_utm_source, default_u
     (1, 'Referral / Partner', 'REF', NULL, 'referral', NULL, 'referral', NULL, 0, NULL, 'Co-marketing, partner links, other sites linking to you.', 1),
     (1, 'SMS', 'SMS', 'sms', 'sms', NULL, 'sms', NULL, 0, NULL, 'Text message campaigns.', 1),
     (1, 'Display / Programmatic (other)', 'DISP', NULL, 'display', NULL, 'display,cpm,programmatic', NULL, 0, 'placement,device', 'Any programmatic/display network not covered above.', 1);
+
+-- Classifies each seeded channel so the Campaign form knows which fixed
+-- "full campaign details" block to show (Google/Meta/LinkedIn Ads only --
+-- everything else stays 'other', its schema.sql default). Bing/Microsoft
+-- Ads maps to google_ads since its Search campaign structure (keyword match
+-- types, ValueTrack placeholders) is functionally the same form.
+UPDATE channels SET platform_type = 'google_ads' WHERE tenant_id = 1 AND short_code IN ('GA', 'GDN', 'YT', 'GSHOP', 'BING');
+UPDATE channels SET platform_type = 'meta_ads' WHERE tenant_id = 1 AND short_code = 'FB';
+UPDATE channels SET platform_type = 'linkedin_ads' WHERE tenant_id = 1 AND short_code = 'LI';
 
 -- Example Custom Variables, demonstrating a real campaign-naming convention:
 -- "PA1-DT-CPQ-GA-RSA-Traffic-Aug2026-V1" via a {{format}}/{{objective}}/{{date}}/{{version}}

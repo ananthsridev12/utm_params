@@ -8,7 +8,7 @@ class Channel extends BaseModel
     protected static array $fillable = [
         'name', 'short_code', 'default_utm_source', 'default_utm_medium',
         'recommended_sources', 'recommended_mediums', 'term_label', 'requires_term',
-        'extra_param_labels', 'description', 'status',
+        'extra_param_labels', 'platform_type', 'description', 'status',
     ];
 
     /**

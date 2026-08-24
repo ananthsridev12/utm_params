@@ -48,6 +48,17 @@
         <div class="hint">Only keyword-targeted Search channels (Google/Bing Search) typically need this checked. Leave unchecked for Display, Social, Video, Email, etc. -- utm_term stays optional there.</div>
       </div>
       <div class="field">
+        <label for="platform_type">Ad platform</label>
+        <?php $platformType = $record['platform_type'] ?? 'other'; ?>
+        <select id="platform_type" name="platform_type">
+          <option value="other" <?= $platformType === 'other' ? 'selected' : '' ?>>Other (no ad-platform settings)</option>
+          <option value="google_ads" <?= $platformType === 'google_ads' ? 'selected' : '' ?>>Google Ads (also Microsoft/Bing)</option>
+          <option value="meta_ads" <?= $platformType === 'meta_ads' ? 'selected' : '' ?>>Meta Ads (Facebook/Instagram)</option>
+          <option value="linkedin_ads" <?= $platformType === 'linkedin_ads' ? 'selected' : '' ?>>LinkedIn Ads</option>
+        </select>
+        <div class="hint">Decides which fixed campaign-details form (budget, bidding, targeting, keywords) the Campaign builder shows for campaigns using this channel.</div>
+      </div>
+      <div class="field">
         <label for="extra_param_labels">Extra parameters</label>
         <input type="text" id="extra_param_labels" name="extra_param_labels" value="<?= e($record['extra_param_labels'] ?? '') ?>" placeholder="e.g. network,device,matchtype">
         <div class="hint">Comma-separated list of extra query-param names, appended to the generated URL (e.g. Google Ads ValueTrack params like {device}, {matchtype}).</div>

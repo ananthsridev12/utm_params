@@ -11,11 +11,14 @@ class ChannelController extends BaseController
     protected string $routeBase = 'channels';
     protected string $title = 'Channel';
 
+    private const PLATFORM_TYPES = ['google_ads', 'meta_ads', 'linkedin_ads', 'other'];
+
     protected function validate(array $input, ?int $id): array
     {
         $errors = [];
         $name = trim((string) ($input['name'] ?? ''));
         if ($name === '') $errors['name'] = 'Name is required.';
+        $platformType = in_array($input['platform_type'] ?? '', self::PLATFORM_TYPES, true) ? $input['platform_type'] : 'other';
 
         $listPattern = '/^[a-zA-Z0-9_, -]+$/';
         $extraLabels = trim((string) ($input['extra_param_labels'] ?? ''));
@@ -41,6 +44,7 @@ class ChannelController extends BaseController
             'term_label' => trim((string) ($input['term_label'] ?? '')) ?: null,
             'requires_term' => !empty($input['requires_term']) ? 1 : 0,
             'extra_param_labels' => $extraLabels ?: null,
+            'platform_type' => $platformType,
             'description' => trim((string) ($input['description'] ?? '')) ?: null,
             'status' => ($input['status'] ?? 'active') === 'active' ? 'active' : 'inactive',
         ];

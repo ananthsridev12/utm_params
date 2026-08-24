@@ -60,8 +60,8 @@ Git Version Control" section of `README.md` before touching deploy config.
 | Landing Pages | name/URL/type/owner/status; **CSV import** with downloadable template (`landing-pages/import`, `import-template`) — references other modules by human-readable name/email via `BaseModel::findByColumn()`, unmatched refs warn without failing the row. |
 | Tracking Configurations | Links a Landing Page to the taxonomy, auto-builds a unique `form_id` (via the tenant's Naming Convention pattern), live-renders GA4/CRM snippets. Two CSV export modes: basic+snippets and full+snippets. |
 | Snippet Templates | Per-tenant, editable, `{{token}}`-based. Two seeded defaults (GA4 dataLayer push, CRM lead object). Per-template toggle for whether it applies to Tracking Configs. |
-| Campaign / UTM Link Builder | Pick a Landing Page or type a URL, choose an Ad Channel to auto-fill source/medium (GA4-recommended, shown per channel) and reveal channel-specific extra params (e.g. Google Ads `{keyword}`/`{device}`/`{matchtype}`). Keyword only required for search-type channels. **`utm_cv` (Traffic Type) is a required field here** — it's part of the generated URL query string. Live preview. |
-| Ad Channels | Per-tenant channel presets (short_code, default/recommended source+medium, term label, `requires_term`, extra param labels) driving the Campaign builder. |
+| Campaign / UTM Link Builder | Pick a Landing Page or type a URL, choose an Ad Channel to auto-fill source/medium (GA4-recommended, shown per channel) and reveal channel-specific extra params (e.g. Google Ads `{keyword}`/`{device}`/`{matchtype}`). Keyword only required for search-type channels. **`utm_cv` (Traffic Type) is a required field here** — it's part of the generated URL query string. Live preview. Also holds a **full campaign brief**: shared budget/bidding/schedule fields plus a fixed settings form per ad platform (Google Ads: campaign type/objective/bidding/networks/languages/devices + a repeatable Keywords table; Meta Ads: objective/buying type/bidding/placements/ad format + a repeatable Targeting table; LinkedIn Ads: objective/ad format/bid type/bidding + Targeting table). No approval/draft workflow — full-detail fields are just extra data on the existing record. Exports one or many campaigns' full details to a real multi-sheet `.xlsx` via `App\Core\XlsxWriter`. |
+| Ad Channels | Per-tenant channel presets (short_code, default/recommended source+medium, term label, `requires_term`, extra param labels, **`platform_type`**) driving the Campaign builder — `platform_type` (`google_ads`/`meta_ads`/`linkedin_ads`/`other`) decides which fixed full-details form a campaign under that channel shows. |
 | Custom Variables | Tenant-defined data-layer keys beyond the built-in taxonomy — `static_list` (with options) or `free_text`, each scoped to show on Tracking Configs and/or Campaigns. Becomes a `{{key_name}}` token usable in Snippet Templates and Naming Conventions. Polymorphic values table (`custom_variable_values`, `entity_type`/`entity_id`) shared between Tracking Configs and Campaigns. |
 | Users & Roles | Owner/Admin/Editor/Viewer per tenant. Admin creates users directly (temp password, no outbound email) **or** shares an **Invite Link** so people self-register into the same tenant with their own password. |
 | Company Settings | Tenant profile + **Naming Conventions**: `{{token}}` patterns (same syntax as Snippet Templates) controlling how `form_id` and Campaign names are built. |
@@ -116,6 +116,7 @@ code exists yet.
   slug (`cpq`), `{{service_name}}` is the display name (`CPQ`). Naming
   convention patterns that need the display form must use `{{service_name}}`
   (mirrors the pre-existing `{{vertical_name}}`).
+- **Campaign full-details fields are server-resolved by platform, never trusted from the client.** Google/Meta/LinkedIn each render their own fixed fieldset with their own `<select>` options, but a hidden fieldset's inputs still get submitted on form POST — so `objective`/`bidding_strategy`/`bid_amount` and the Meta/LinkedIn Targeting rows use platform-prefixed field names (`google_objective`, `meta_objective`, `meta_targeting_type[]`, `linkedin_targeting_type[]`, …) and `CampaignController` picks which prefix to actually persist by looking up the *selected channel's real `platform_type` in the database* (`Channel::find($channelId)['platform_type']`), not a hidden form field. Also clears the other platforms' columns on save so switching a campaign's channel doesn't leave stale cross-platform data sitting in the row. `App\Core\XlsxWriter` is a from-scratch OOXML writer (via PHP's built-in `ZipArchive`) — no PhpSpreadsheet/Composer — supporting multiple sheets, a bold header row, and string/number cells only (no formulas/formatting).
 - **Invite links are a single reusable, regenerable token per tenant**
   (`tenants.invite_token`/`invite_role`/`invite_enabled`), not a
   per-invitee/single-use table — simplest design that satisfies "share a
@@ -142,6 +143,9 @@ documented at the top as "only run on a pre-existing DB." Run them in order:
    `%7B`/`%7D` in already-saved `generated_url` values
 5. `2026_09_08_org_invite_links.sql` — `tenants.invite_token`/`invite_role`/
    `invite_enabled`
+6. `2026_09_15_campaign_full_details.sql` — `channels.platform_type`, full campaign
+   brief columns on `campaigns` (objective/budget/bidding/schedule + Google/Meta/
+   LinkedIn-specific), `campaign_keywords` and `campaign_targeting` tables
 
 ## Local development
 

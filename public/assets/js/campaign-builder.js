@@ -90,6 +90,23 @@
     });
   }
 
+  // One fixed campaign-details block per ad platform (Google/Meta/LinkedIn each have
+  // genuinely different settings) -- shown/hidden based on the selected channel's
+  // platform_type. Everything not matching 'other' falls back to 'other' (no ad-platform
+  // settings shown) so an unclassified/no-channel state doesn't leave a stale block open.
+  var platformBlocks = {
+    google_ads: $('platform-google_ads'),
+    meta_ads: $('platform-meta_ads'),
+    linkedin_ads: $('platform-linkedin_ads'),
+    other: $('platform-other'),
+  };
+  function showPlatformBlock(platformType) {
+    var key = platformBlocks[platformType] ? platformType : 'other';
+    Object.keys(platformBlocks).forEach(function (k) {
+      if (platformBlocks[k]) platformBlocks[k].style.display = (k === key) ? 'block' : 'none';
+    });
+  }
+
   function applyChannel(preserveExtraValues) {
     var channel = channelsById[channelEl.value];
     if (channel) {
@@ -99,16 +116,49 @@
       termEl.required = !!channel.requires_term;
       renderSuggestionChips(sourceSuggestions, channel.recommended_sources, sourceEl);
       renderSuggestionChips(mediumSuggestions, channel.recommended_mediums, mediumEl);
+      showPlatformBlock(channel.platform_type || 'other');
     } else {
       termLabelEl.textContent = 'utm_term (optional)';
       termEl.required = false;
       renderSuggestionChips(sourceSuggestions, [], sourceEl);
       renderSuggestionChips(mediumSuggestions, [], mediumEl);
+      showPlatformBlock('other');
     }
     renderExtraParams(channel, preserveExtraValues);
     renderPreview();
     suggestName();
   }
+
+  // Generic add/remove for a repeatable-row table (Keywords, Meta/LinkedIn Targeting).
+  // Mirrors the same add/remove-row pattern used by custom-variable-form.js's Options
+  // editor: clone the template row, clear its values, append; removing the last row in
+  // a container just clears it instead of leaving an empty table.
+  function initRepeatableRows(container, addBtn) {
+    if (!container || !addBtn) return;
+    addBtn.addEventListener('click', function () {
+      var rows = container.children;
+      if (!rows.length) return;
+      var clone = rows[0].cloneNode(true);
+      clone.querySelectorAll('input[type="text"], input[type="number"]').forEach(function (i) { i.value = ''; });
+      clone.querySelectorAll('select').forEach(function (s) { s.selectedIndex = 0; });
+      container.appendChild(clone);
+    });
+    container.addEventListener('click', function (e) {
+      var btn = e.target.closest('.remove-keyword-row, .remove-targeting-row');
+      if (!btn || !container.contains(btn)) return;
+      var rows = container.children;
+      if (rows.length > 1) {
+        btn.closest('.keyword-row, .targeting-row').remove();
+      } else {
+        rows[0].querySelectorAll('input[type="text"], input[type="number"]').forEach(function (i) { i.value = ''; });
+        rows[0].querySelectorAll('select').forEach(function (s) { s.selectedIndex = 0; });
+      }
+    });
+  }
+  initRepeatableRows($('keyword-rows'), $('add-keyword-row'));
+  document.querySelectorAll('.add-targeting-row').forEach(function (btn) {
+    initRepeatableRows($(btn.getAttribute('data-target')), btn);
+  });
 
   // Ad platforms' click-time placeholders (Google/Bing ValueTrack: {keyword}, {device},
   // {matchtype}, {network}, ...) only get recognized when they appear literally,

@@ -3,10 +3,15 @@
 namespace App\Controllers;
 
 use App\Core\Auth;
+use App\Core\Flash;
 use App\Core\Request;
 use App\Core\TenantContext;
+use App\Core\Url;
 use App\Core\View;
+use App\Core\XlsxWriter;
 use App\Models\Campaign;
+use App\Models\CampaignKeyword;
+use App\Models\CampaignTargeting;
 use App\Models\Channel;
 use App\Models\CustomVariable;
 use App\Models\CustomVariableValue;
@@ -43,6 +48,8 @@ class CampaignController extends BaseController
             'record' => [],
             'errors' => [],
             'customValues' => [],
+            'keywords' => [],
+            'targeting' => [],
         ], $this->extraViewData()));
     }
 
@@ -65,6 +72,8 @@ class CampaignController extends BaseController
             'record' => $record,
             'errors' => [],
             'customValues' => CustomVariableValue::forEntityById('campaign', $id),
+            'keywords' => CampaignKeyword::forCampaign($id),
+            'targeting' => CampaignTargeting::forCampaign($id),
         ], $this->extraViewData()));
     }
 
@@ -86,6 +95,7 @@ class CampaignController extends BaseController
                 'term_label' => $c['term_label'],
                 'requires_term' => (bool) $c['requires_term'],
                 'extra_params' => Channel::parseExtraParamLabels($c['extra_param_labels']),
+                'platform_type' => $c['platform_type'] ?? 'other',
             ], $channels),
             'landingPageOptions' => LandingPage::forDropdown(),
             'verticalOptions' => Vertical::allActive(),
@@ -135,6 +145,98 @@ class CampaignController extends BaseController
             return $row;
         }, Campaign::allWithRelations());
         $this->streamCsv('campaigns.csv', $rows);
+    }
+
+    /** Full-details Excel download for one campaign. */
+    public function exportExcel(array $params): void
+    {
+        Auth::requireLogin();
+        $id = (int) ($params['id'] ?? 0);
+        $record = Campaign::find($id);
+        if (!$record) {
+            http_response_code(404);
+            exit('Not found.');
+        }
+        $this->streamCampaignExcel([$id]);
+    }
+
+    /** Full-details Excel download for a checked set of campaigns from the index. */
+    public function exportExcelSelected(): void
+    {
+        Auth::requireLogin();
+        $ids = Request::post('ids', []);
+        $ids = is_array($ids) ? array_filter(array_map('intval', $ids)) : [];
+        if (empty($ids)) {
+            Flash::error('Select at least one campaign to export.');
+            header('Location: ' . Url::to($this->routeBase));
+            exit;
+        }
+        $this->streamCampaignExcel($ids);
+    }
+
+    /**
+     * Builds and streams a multi-sheet .xlsx for the given campaign IDs: an
+     * overview sheet (settings/bidding/UTM), a platform-settings sheet
+     * (Google/Meta/LinkedIn columns, blank where not applicable), and
+     * Keywords/Targeting sheets with one row per repeatable entry, tagged by
+     * campaign name so a multi-campaign export stays readable in one file.
+     */
+    private function streamCampaignExcel(array $ids): void
+    {
+        $all = Campaign::allWithRelations();
+        $selected = array_values(array_filter($all, fn($r) => in_array((int) $r['id'], $ids, true)));
+        if (empty($selected)) {
+            http_response_code(404);
+            exit('Not found.');
+        }
+
+        $writer = new XlsxWriter();
+
+        $writer->addSheet('Campaigns', [
+            'Campaign Name', 'Channel', 'Platform', 'Status', 'Landing Page', 'Objective', 'Budget Type',
+            'Budget Amount', 'Currency', 'Bidding Strategy', 'Bid Amount', 'Start Date', 'End Date',
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'utm_cv', 'Generated URL',
+        ], array_map(fn($r) => [
+            $r['name'], $r['channel_name'] ?? '', self::platformLabel($r['channel_platform_type'] ?? 'other'),
+            ucfirst($r['status']), $r['landing_page_name'] ?? '', $r['objective'] ?? '', $r['budget_type'] ?? '',
+            $r['budget_amount'] !== null ? (float) $r['budget_amount'] : '', $r['currency'] ?? '',
+            $r['bidding_strategy'] ?? '', $r['bid_amount'] !== null ? (float) $r['bid_amount'] : '',
+            $r['start_date'] ?? '', $r['end_date'] ?? '', $r['utm_source'], $r['utm_medium'], $r['utm_campaign'],
+            $r['utm_term'] ?? '', $r['utm_content'] ?? '', $r['traffic_type_code'] ?? '', $r['generated_url'],
+        ], $selected));
+
+        $writer->addSheet('Platform Settings', [
+            'Campaign Name', 'Google Campaign Type', 'Google Networks', 'Google Languages', 'Google Devices',
+            'Meta Buying Type', 'Meta Placements', 'Meta Ad Format', 'LinkedIn Ad Format', 'LinkedIn Bid Type',
+        ], array_map(fn($r) => [
+            $r['name'], $r['google_campaign_type'] ?? '', $r['google_networks'] ?? '', $r['google_languages'] ?? '',
+            $r['google_devices'] ?? '', $r['meta_buying_type'] ?? '', $r['meta_placements'] ?? '',
+            $r['meta_ad_format'] ?? '', $r['linkedin_ad_format'] ?? '', $r['linkedin_bid_type'] ?? '',
+        ], $selected));
+
+        $keywordRows = [];
+        $targetingRows = [];
+        foreach ($selected as $r) {
+            foreach (CampaignKeyword::forCampaign((int) $r['id']) as $k) {
+                $keywordRows[] = [$r['name'], $k['keyword'], ucfirst($k['match_type']), $k['is_negative'] ? 'Yes' : 'No'];
+            }
+            foreach (CampaignTargeting::forCampaign((int) $r['id']) as $t) {
+                $targetingRows[] = [$r['name'], ucwords(str_replace('_', ' ', $t['criterion_type'])), $t['criterion_value']];
+            }
+        }
+        $writer->addSheet('Keywords', ['Campaign Name', 'Keyword', 'Match Type', 'Negative?'], $keywordRows);
+        $writer->addSheet('Targeting', ['Campaign Name', 'Criterion Type', 'Criterion Value'], $targetingRows);
+
+        $filename = count($selected) === 1
+            ? (preg_replace('/[^a-zA-Z0-9_-]+/', '-', $selected[0]['name']) ?: 'campaign') . '.xlsx'
+            : 'campaigns-' . date('Y-m-d') . '.xlsx';
+        $writer->send($filename);
+    }
+
+    private static function platformLabel(string $platformType): string
+    {
+        $labels = ['google_ads' => 'Google Ads', 'meta_ads' => 'Meta Ads', 'linkedin_ads' => 'LinkedIn Ads', 'other' => 'Other'];
+        return $labels[$platformType] ?? 'Other';
     }
 
     protected function validate(array $input, ?int $id): array
@@ -216,6 +318,33 @@ class CampaignController extends BaseController
             $generatedUrl = $targetUrl . $separator . self::unencodeValueTrackBraces(http_build_query($query));
         }
 
+        // Full campaign brief: budget/schedule are one shared set of fields (every ad
+        // platform has these). Objective/bidding strategy/bid amount are collected as
+        // THREE separately-named inputs (google_*/meta_*/linkedin_*) -- one per fixed
+        // platform fieldset on the form -- because a hidden fieldset's inputs still get
+        // submitted, so same-named fields would silently collide. Which one actually
+        // gets saved is resolved here from the channel's real platform_type, never
+        // trusted from the client, so switching channels can't leave a stale value in
+        // the wrong platform's slot.
+        $platformType = 'other';
+        if ($channelId !== null) {
+            $channel = Channel::find($channelId);
+            $platformType = $channel['platform_type'] ?? 'other';
+        }
+        // Form field names use the short prefix ("google_objective"), not the full
+        // platform_type value ("google_ads_objective").
+        $platformPrefixes = ['google_ads' => 'google', 'meta_ads' => 'meta', 'linkedin_ads' => 'linkedin'];
+        $platformPrefix = $platformPrefixes[$platformType] ?? null;
+        $toDecimalOrNull = fn($v) => ($v === null || trim((string) $v) === '') ? null : (float) $v;
+        $toDateOrNull = fn($v) => ($v === null || trim((string) $v) === '') ? null : $v;
+        $toCsvOrNull = function ($v) {
+            if (!is_array($v)) return null;
+            $clean = array_filter(array_map('trim', $v), fn($x) => $x !== '');
+            return $clean ? implode(',', $clean) : null;
+        };
+
+        $budgetType = in_array($input['budget_type'] ?? '', ['daily', 'lifetime'], true) ? $input['budget_type'] : null;
+
         $data = [
             'landing_page_id' => $toIntOrNull($input['landing_page_id'] ?? null),
             'channel_id' => $channelId,
@@ -230,6 +359,29 @@ class CampaignController extends BaseController
             'extra_params' => $extraParams ? json_encode($extraParams) : null,
             'generated_url' => $generatedUrl,
             'status' => $status,
+
+            'budget_type' => $budgetType,
+            'budget_amount' => $toDecimalOrNull($input['budget_amount'] ?? null),
+            'currency' => trim((string) ($input['currency'] ?? 'USD')) ?: 'USD',
+            'start_date' => $toDateOrNull($input['start_date'] ?? null),
+            'end_date' => $toDateOrNull($input['end_date'] ?? null),
+
+            'objective' => $platformPrefix ? (trim((string) ($input[$platformPrefix . '_objective'] ?? '')) ?: null) : null,
+            'bidding_strategy' => $platformPrefix ? (trim((string) ($input[$platformPrefix . '_bidding_strategy'] ?? '')) ?: null) : null,
+            'bid_amount' => $platformPrefix ? $toDecimalOrNull($input[$platformPrefix . '_bid_amount'] ?? null) : null,
+
+            // Platform-only fields are cleared for every platform except the one
+            // actually selected, so an old value from a since-changed channel doesn't
+            // linger unseen in the record (and show up wrong in an Excel export later).
+            'google_campaign_type' => $platformType === 'google_ads' ? (trim((string) ($input['google_campaign_type'] ?? '')) ?: null) : null,
+            'google_networks' => $platformType === 'google_ads' ? $toCsvOrNull($input['google_networks'] ?? null) : null,
+            'google_languages' => $platformType === 'google_ads' ? (trim((string) ($input['google_languages'] ?? '')) ?: null) : null,
+            'google_devices' => $platformType === 'google_ads' ? $toCsvOrNull($input['google_devices'] ?? null) : null,
+            'meta_buying_type' => $platformType === 'meta_ads' ? (trim((string) ($input['meta_buying_type'] ?? '')) ?: null) : null,
+            'meta_placements' => $platformType === 'meta_ads' ? $toCsvOrNull($input['meta_placements'] ?? null) : null,
+            'meta_ad_format' => $platformType === 'meta_ads' ? (trim((string) ($input['meta_ad_format'] ?? '')) ?: null) : null,
+            'linkedin_ad_format' => $platformType === 'linkedin_ads' ? (trim((string) ($input['linkedin_ad_format'] ?? '')) ?: null) : null,
+            'linkedin_bid_type' => $platformType === 'linkedin_ads' ? (trim((string) ($input['linkedin_bid_type'] ?? '')) ?: null) : null,
         ];
         return [$errors, $data];
     }
@@ -245,6 +397,46 @@ class CampaignController extends BaseController
             }
         }
         CustomVariableValue::saveForEntity('campaign', $savedId, $values);
+
+        // Google Ads keyword rows (only meaningful for Search-type campaigns, but
+        // harmless to save empty for other platforms since the form hides the table).
+        $keywordText = Request::post('keyword_text', []);
+        $keywordMatchType = Request::post('keyword_match_type', []);
+        $keywordNegative = Request::post('keyword_negative', []);
+        $keywordRows = [];
+        if (is_array($keywordText)) {
+            foreach ($keywordText as $i => $keyword) {
+                $keywordRows[] = [
+                    'keyword' => $keyword,
+                    'match_type' => $keywordMatchType[$i] ?? 'broad',
+                    'is_negative' => ($keywordNegative[$i] ?? '') === 'negative',
+                ];
+            }
+        }
+        CampaignKeyword::saveForCampaign($savedId, $keywordRows);
+
+        // Meta and LinkedIn each render their own Targeting table with their own
+        // criterion_type options, but write into the SAME campaign_targeting table --
+        // so, same reasoning as objective/bidding_strategy in validate(), their posted
+        // field names are prefixed (meta_targeting_*/linkedin_targeting_*) to avoid a
+        // hidden fieldset's rows colliding with the visible one, and only the field set
+        // matching the channel's actual (server-resolved) platform gets saved.
+        $platformType = 'other';
+        $channelId = (int) ($input['channel_id'] ?? 0);
+        if ($channelId > 0) {
+            $channel = Channel::find($channelId);
+            $platformType = $channel['platform_type'] ?? 'other';
+        }
+        $prefix = $platformType === 'meta_ads' ? 'meta' : ($platformType === 'linkedin_ads' ? 'linkedin' : null);
+        $targetingType = $prefix ? Request::post($prefix . '_targeting_type', []) : [];
+        $targetingValue = $prefix ? Request::post($prefix . '_targeting_value', []) : [];
+        $targetingRows = [];
+        if (is_array($targetingType)) {
+            foreach ($targetingType as $i => $type) {
+                $targetingRows[] = ['criterion_type' => $type, 'criterion_value' => $targetingValue[$i] ?? ''];
+            }
+        }
+        CampaignTargeting::saveForCampaign($savedId, $targetingRows);
     }
 
     /** Public + static so the same logic is trivially unit-testable and mirrors the JS version in campaign-builder.js. */

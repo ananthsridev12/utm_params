@@ -27,8 +27,8 @@ ones to round the workflow out:
 | **Landing Pages** | new | name, URL, type, owner, status (draft/live/archived) |
 | **Tracking Configurations** | `URL` sheet | links a page to the taxonomy, auto-builds a unique `form_id`, live-renders both tracking snippets |
 | **Snippet Templates** | the sheet's hardcoded GA4/Zoho code blocks | per-tenant, editable, token-based (`{{form_id}}`, `{{service_vertical}}`, …) |
-| **Campaign / UTM Link Builder** | new | pick a Landing Page or type any URL, choose an Ad Channel to auto-fill source/medium and reveal channel-specific extra parameters (e.g. Google Ads `{keyword}`/`{device}`/`{matchtype}`), live-previews the generated URL |
-| **Ad Channels** | new | per-tenant channel presets (Google Ads Search, Meta Ads, LinkedIn Ads, Email, …) driving the Campaign builder's defaults |
+| **Campaign / UTM Link Builder** | new | pick a Landing Page or type any URL, choose an Ad Channel to auto-fill source/medium and reveal channel-specific extra parameters (e.g. Google Ads `{keyword}`/`{device}`/`{matchtype}`), live-previews the generated URL. Also holds a full campaign brief -- budget, bidding, schedule, plus a fixed settings form per ad platform (Google Ads keywords/networks/devices, Meta Ads placements/audience targeting, LinkedIn Ads format/audience targeting) -- and exports one or several campaigns' full details to a real `.xlsx` workbook (Campaigns/Platform Settings/Keywords/Targeting sheets), generated natively with no Composer dependency |
+| **Ad Channels** | new | per-tenant channel presets (Google Ads Search, Meta Ads, LinkedIn Ads, Email, …) driving the Campaign builder's defaults, classified by ad platform so the Campaign form knows which full-details form to show |
 | **Custom Variables** | new | tenant-defined data-layer keys beyond the built-in taxonomy (add/remove freely, fixed-list or free-text), scoped to show on Tracking Configs, Campaigns, or both |
 | Users & Roles | new | Owner / Admin / Editor / Viewer per tenant |
 | Company Settings | new | tenant profile + **Naming Conventions** (below) |
@@ -140,7 +140,7 @@ deploy. Short version:
 ## Database migrations
 
 `database/schema.sql` is only imported once, on a brand new database. Any schema change
-made after that (like the Ad Channels module, or org invite links) ships as a numbered file under
+made after that (like the Ad Channels module, org invite links, or full campaign details) ships as a numbered file under
 `database/migrations/` — import each one you haven't run yet, in order, the same way you
 imported `schema.sql` (phpMyAdmin → Import, or `mysql -u ... -p dbname < database/migrations/xxx.sql`).
 A fresh install that imports the current `schema.sql` already has everything and should

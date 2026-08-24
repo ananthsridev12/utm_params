@@ -29,6 +29,10 @@ foreach ([
 // alongside the basic-details-+-snippets one registered above.
 $router->get('tracking-configs/export-full', [TrackingConfigController::class, 'exportCsvFull']);
 
+// Campaigns: full-details Excel download, one campaign or a checked set from the index.
+$router->get('campaigns/export-excel/{id}', [CampaignController::class, 'exportExcel']);
+$router->post('campaigns/export-excel-selected', [CampaignController::class, 'exportExcelSelected']);
+
 // Landing Pages CSV import (template download + upload).
 $router->get('landing-pages/import', [LandingPageController::class, 'showImport']);
 $router->post('landing-pages/import', [LandingPageController::class, 'import']);
