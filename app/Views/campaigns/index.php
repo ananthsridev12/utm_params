@@ -15,9 +15,11 @@
   <?php else: ?>
   <form method="post" action="<?= url($routeBase . '/export-excel-selected') ?>" id="campaigns-export-form">
     <?= csrf_field() ?>
-    <div class="form-actions" style="margin-bottom:10px">
+    <div class="form-actions" style="margin-bottom:2px">
       <button class="btn secondary small" type="submit"><?= icon('download') ?>Export Selected (Excel)</button>
+      <button class="btn secondary small" type="submit" formaction="<?= url($routeBase . '/export-google-bulk-selected') ?>"><?= icon('download') ?>Export Selected (Google Ads Bulk CSV)</button>
     </div>
+    <p class="hint" style="margin-bottom:10px">Google Ads Bulk CSV covers Campaign/Ad Group/Keyword rows in Google Ads Editor's bulk-upload format (Google Ads channels only, others are skipped) -- ad copy (headlines/final URL) isn't collected here and needs to be added separately before uploading. Verify column names against your account's own downloaded template before a real upload, since Google's format can change.</p>
     <table>
       <thead><tr><th style="width:28px"><input type="checkbox" id="select-all-campaigns" style="width:auto"></th><th>Name</th><th>Channel</th><th>Source / Medium / Campaign</th><th>Generated URL</th><th>Status</th><th></th></tr></thead>
       <tbody>
@@ -43,6 +45,9 @@
           <td class="table-actions">
             <a href="<?= url($routeBase . '/edit/' . $r['id']) ?>"><?= has_role('editor') ? 'Edit' : 'View' ?></a>
             <a href="<?= url($routeBase . '/export-excel/' . $r['id']) ?>">Excel</a>
+            <?php if (($r['channel_platform_type'] ?? 'other') === 'google_ads'): ?>
+              <a href="<?= url($routeBase . '/export-google-bulk/' . $r['id']) ?>">Google Bulk CSV</a>
+            <?php endif; ?>
             <?php if (has_role('admin')): ?>
             <form method="post" action="<?= url($routeBase . '/delete/' . $r['id']) ?>" style="display:inline" data-confirm="Delete this campaign?">
               <?= csrf_field() ?>

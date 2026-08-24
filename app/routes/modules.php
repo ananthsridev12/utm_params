@@ -33,6 +33,10 @@ $router->get('tracking-configs/export-full', [TrackingConfigController::class, '
 $router->get('campaigns/export-excel/{id}', [CampaignController::class, 'exportExcel']);
 $router->post('campaigns/export-excel-selected', [CampaignController::class, 'exportExcelSelected']);
 
+// Campaigns: Google Ads Editor / Bulk Actions-style bulk upload CSV (Google Ads channels only).
+$router->get('campaigns/export-google-bulk/{id}', [CampaignController::class, 'exportGoogleAdsBulk']);
+$router->post('campaigns/export-google-bulk-selected', [CampaignController::class, 'exportGoogleAdsBulkSelected']);
+
 // Landing Pages CSV import (template download + upload).
 $router->get('landing-pages/import', [LandingPageController::class, 'showImport']);
 $router->post('landing-pages/import', [LandingPageController::class, 'import']);

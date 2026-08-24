@@ -239,6 +239,122 @@ class CampaignController extends BaseController
         return $labels[$platformType] ?? 'Other';
     }
 
+    /** Google Ads Editor / Bulk Actions-style CSV for one campaign. */
+    public function exportGoogleAdsBulk(array $params): void
+    {
+        Auth::requireLogin();
+        $id = (int) ($params['id'] ?? 0);
+        $record = Campaign::find($id);
+        if (!$record) {
+            http_response_code(404);
+            exit('Not found.');
+        }
+        $this->streamGoogleAdsBulkCsv([$id]);
+    }
+
+    /** Same, for a checked set of campaigns from the index -- non-Google-Ads ones are skipped. */
+    public function exportGoogleAdsBulkSelected(): void
+    {
+        Auth::requireLogin();
+        $ids = Request::post('ids', []);
+        $ids = is_array($ids) ? array_filter(array_map('intval', $ids)) : [];
+        if (empty($ids)) {
+            Flash::error('Select at least one campaign to export.');
+            header('Location: ' . Url::to($this->routeBase));
+            exit;
+        }
+        $this->streamGoogleAdsBulkCsv($ids);
+    }
+
+    /**
+     * Builds a CSV in the shape of Google Ads Editor's / Bulk Actions' bulk
+     * upload sheet: one row per entity (Campaign, then its Ad Group, then
+     * each Keyword), sharing one set of columns and leaving whichever don't
+     * apply to that row blank -- the same layout Google's own template uses.
+     * Deliberately narrow scope: this covers Campaign/Ad Group/Keyword rows
+     * only, since that's the data this app actually collects. It does NOT
+     * emit Ad rows (headlines/descriptions/final URLs) -- this app doesn't
+     * collect ad creative, and fabricating placeholder ad copy would be
+     * actively wrong to hand someone for upload into a live account. Only
+     * campaigns on a Google Ads channel are included; anything else is
+     * skipped with a warning, matching the CSV importer's pattern elsewhere.
+     */
+    private function streamGoogleAdsBulkCsv(array $ids): void
+    {
+        $all = Campaign::allWithRelations();
+        $selected = array_values(array_filter($all, fn($r) => in_array((int) $r['id'], $ids, true)));
+        $googleCampaigns = array_values(array_filter($selected, fn($r) => ($r['channel_platform_type'] ?? 'other') === 'google_ads'));
+        $skipped = count($selected) - count($googleCampaigns);
+
+        if (empty($googleCampaigns)) {
+            Flash::error('None of the selected campaigns are on a Google Ads channel -- this template only applies to those.');
+            header('Location: ' . Url::to($this->routeBase));
+            exit;
+        }
+        if ($skipped > 0) {
+            Flash::error($skipped . ' selected campaign(s) skipped -- not on a Google Ads channel.');
+        }
+
+        $columns = [
+            'Action', 'Campaign', 'Campaign Type', 'Campaign Daily Budget', 'Budget Type',
+            'Bid Strategy Type', 'Networks', 'Languages', 'Campaign Start Date', 'Campaign End Date',
+            'Ad Group', 'Max CPC', 'Keyword', 'Criterion Type', 'Status',
+        ];
+        $blankRow = array_fill_keys($columns, '');
+        $toGoogleDate = fn($d) => $d ? date('n/j/Y', strtotime($d)) : '';
+        $toSemicolonList = fn($csv) => $csv ? implode(';', array_map(
+            fn($v) => ['search_network' => 'Google Search', 'display_network' => 'Google Display Network', 'search_partners' => 'Search Partners'][$v] ?? $v,
+            array_filter(array_map('trim', explode(',', $csv)))
+        )) : '';
+
+        $rows = [];
+        foreach ($googleCampaigns as $r) {
+            $status = $r['status'] === 'active' ? 'Enabled' : 'Paused';
+
+            $rows[] = array_merge($blankRow, [
+                'Action' => 'Add',
+                'Campaign' => $r['name'],
+                'Campaign Type' => 'Search',
+                'Campaign Daily Budget' => $r['budget_amount'] !== null ? (float) $r['budget_amount'] : '',
+                'Budget Type' => $r['budget_type'] ? ucfirst($r['budget_type']) : '',
+                'Bid Strategy Type' => $r['bidding_strategy'] ?? '',
+                'Networks' => $toSemicolonList($r['google_networks'] ?? ''),
+                'Languages' => implode(';', array_filter(array_map('trim', explode(',', $r['google_languages'] ?? '')))),
+                'Campaign Start Date' => $toGoogleDate($r['start_date'] ?? null),
+                'Campaign End Date' => $toGoogleDate($r['end_date'] ?? null),
+                'Status' => $status,
+            ]);
+
+            $rows[] = array_merge($blankRow, [
+                'Action' => 'Add',
+                'Campaign' => $r['name'],
+                'Ad Group' => $r['name'],
+                'Max CPC' => $r['bid_amount'] !== null ? (float) $r['bid_amount'] : '',
+                'Status' => $status,
+            ]);
+
+            foreach (CampaignKeyword::forCampaign((int) $r['id']) as $k) {
+                $criterionType = ucfirst($k['match_type']);
+                if ($k['is_negative']) {
+                    $criterionType = 'Negative ' . $criterionType;
+                }
+                $rows[] = array_merge($blankRow, [
+                    'Action' => 'Add',
+                    'Campaign' => $r['name'],
+                    'Ad Group' => $r['name'],
+                    'Keyword' => $k['keyword'],
+                    'Criterion Type' => $criterionType,
+                    'Status' => 'Enabled',
+                ]);
+            }
+        }
+
+        $filename = count($googleCampaigns) === 1
+            ? (preg_replace('/[^a-zA-Z0-9_-]+/', '-', $googleCampaigns[0]['name']) ?: 'campaign') . '-google-ads-bulk.csv'
+            : 'google-ads-bulk-' . date('Y-m-d') . '.csv';
+        $this->streamCsv($filename, $rows);
+    }
+
     protected function validate(array $input, ?int $id): array
     {
         $errors = [];
