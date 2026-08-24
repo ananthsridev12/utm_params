@@ -4,12 +4,13 @@ namespace App\Models;
 
 use App\Core\Database;
 use App\Core\TenantContext;
+use Throwable;
 
 class Campaign extends BaseModel
 {
     protected static string $table = 'campaigns';
     protected static array $fillable = [
-        'landing_page_id', 'channel_id', 'traffic_type_id', 'name', 'target_url', 'utm_source', 'utm_medium',
+        'landing_page_id', 'channel_id', 'traffic_type_id', 'seq_number', 'name', 'target_url', 'utm_source', 'utm_medium',
         'utm_campaign', 'utm_term', 'utm_content', 'extra_params', 'generated_url', 'status',
         // Full campaign brief -- common fields, resolved server-side from whichever
         // platform-specific block (Google/Meta/LinkedIn) the selected channel maps to.
@@ -36,10 +37,62 @@ class Campaign extends BaseModel
         return $stmt->fetchAll();
     }
 
-    /** Running count for this tenant, for the {{seq}} naming-convention token. */
+    /**
+     * Read-only preview of the tenant's persisted campaign-sequence counter,
+     * for the {{seq}} naming-convention token shown while the form is open.
+     * NOT incremented here -- the number actually assigned to a saved
+     * campaign is reserved transactionally in create() below, so two people
+     * opening the create form at the same moment may preview the same
+     * number but only one will actually receive it when they save.
+     */
     public static function nextSeq(): int
     {
-        return self::count() + 1;
+        $tenantId = TenantContext::requireTenant();
+        $stmt = Database::connection()->prepare('SELECT next_campaign_seq FROM tenants WHERE id = ?');
+        $stmt->execute([$tenantId]);
+        $seq = $stmt->fetchColumn();
+        return $seq !== false ? (int) $seq : 1;
+    }
+
+    /**
+     * Reserves the tenant's next campaign sequence number and assigns it to
+     * this campaign's seq_number, atomically and without ever reusing a
+     * number (even after deletes). Locks the tenant row for the duration of
+     * the reservation so two concurrent creates for the same tenant can't
+     * receive the same number.
+     */
+    public static function create(array $data, ?int $userId): int
+    {
+        $tenantId = TenantContext::requireTenant();
+        $pdo = Database::connection();
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
+        }
+        try {
+            $stmt = $pdo->prepare('SELECT next_campaign_seq FROM tenants WHERE id = ? FOR UPDATE');
+            $stmt->execute([$tenantId]);
+            $seq = (int) $stmt->fetchColumn();
+            if ($seq < 1) {
+                $seq = 1;
+            }
+
+            $data['seq_number'] = $seq;
+            $id = parent::create($data, $userId);
+
+            $update = $pdo->prepare('UPDATE tenants SET next_campaign_seq = ? WHERE id = ?');
+            $update->execute([$seq + 1, $tenantId]);
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+            return $id;
+        } catch (Throwable $e) {
+            if ($ownsTransaction) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
     public static function delete(int $id): bool
